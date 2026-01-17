@@ -1,0 +1,2 @@
+# Survey domain layer
+

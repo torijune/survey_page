@@ -2,10 +2,10 @@
 
 # AWS 설정
 AWS_REGION="us-east-1"
-ECR_REPO="cvpilot-backend"
-LAMBDA_FUNCTION="cvpilot-lambda"
+ECR_REPO="survey-backend"
+LAMBDA_FUNCTION="survey-lambda"
 
-echo "🚀 CVPilot 백엔드 Lambda 배포 시작..."
+echo "🚀 설문조사 시스템 백엔드 Lambda 배포 시작..."
 
 # AWS 계정 ID 가져오기
 AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)

@@ -1,4 +1,4 @@
 class Settings:
-    PROJECT_NAME: str = "FOM2025 Summer Conf"
+    PROJECT_NAME: str = "설문조사 시스템"
 
 settings = Settings()

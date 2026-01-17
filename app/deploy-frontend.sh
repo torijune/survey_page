@@ -4,11 +4,11 @@
 set -e
 
 # 설정
-BUCKET_NAME="cvpilot-frontend"
+BUCKET_NAME="survey-frontend"
 REGION="us-east-1"
-CLOUDFRONT_COMMENT="CVPilot Frontend Distribution"
+CLOUDFRONT_COMMENT="Survey Frontend Distribution"
 
-echo "🚀 CVPilot 프론트엔드 S3 배포 시작..."
+echo "🚀 설문조사 시스템 프론트엔드 S3 배포 시작..."
 
 # 1. S3 버킷 생성 (존재하지 않으면)
 echo "📦 S3 버킷 확인/생성 중..."
