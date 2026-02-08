@@ -130,12 +130,20 @@ class ResponseService:
         """응답 통계 조회"""
         return await self.response_repository.get_response_statistics(UUID(survey_id))
     
+    async def delete_response(self, response_id: str) -> bool:
+        """응답 삭제"""
+        return await self.response_repository.delete_response(UUID(response_id))
+    
     def _get_section_letter(self, section_index: int) -> str:
         """섹션 번호를 A, B, C... 형식으로 변환"""
         return chr(65 + section_index)  # A=65, B=66, C=67...
     
     def _get_question_number(self, survey, question) -> str:
-        """문항 번호를 A1, A2, B1... 형식으로 변환"""
+        """문항 번호 반환 (저장된 question_number 우선, 없으면 A1, A2, B1... 형식으로 생성)"""
+        # 저장된 question_number가 있으면 우선 사용
+        if hasattr(question, 'question_number') and question.question_number:
+            return question.question_number
+        
         # 섹션 인덱스 찾기
         section_index = -1
         for i, section in enumerate(survey.sections):

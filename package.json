@@ -1,31 +1,17 @@
 {
-  "name": "fom2025_summer_conf",
+  "name": "survey-machine",
   "version": "1.0.0",
-  "main": "index.js",
-  "directories": {
-    "test": "tests"
-  },
+  "description": "설문조사 생성, 배포, 응답 수집 시스템",
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "backend": "source venv/bin/activate && cd backend && python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload",
-    "app": "cd app && npm run dev",
+    "dev": "cd app && npm run dev",
+    "build": "cd app && npm run build",
+    "start": "cd app && npm start",
+    "backend": "cd backend && source venv/bin/activate && python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload",
     "backend:stop": "pkill -f 'uvicorn app.main:app' || true",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "deploy:frontend": "cd app && bash deploy-frontend.sh",
+    "deploy:backend": "cd backend && bash deploy-lambda.sh"
   },
-  "keywords": [],
+  "keywords": ["survey", "설문조사"],
   "author": "",
-  "license": "ISC",
-  "description": "",
-  "dependencies": {
-    "next": "^15.4.2",
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0"
-  },
-  "devDependencies": {
-    "@types/node": "^24.0.15",
-    "@types/react": "^19.1.8",
-    "typescript": "^5.8.3"
-  }
+  "license": "ISC"
 }

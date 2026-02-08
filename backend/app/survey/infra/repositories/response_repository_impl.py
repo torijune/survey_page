@@ -76,12 +76,30 @@ class ResponseRepositoryImpl(ResponseRepository):
                 query = query.eq("is_complete", True)
             
             result = query.execute()
-            
             responses = [self._map_to_response(row) for row in result.data]
             
-            if include_items:
-                for response in responses:
-                    response.items = await self.get_items_by_response_id(response.id)
+            if include_items and responses:
+                # 배치로 모든 items 조회
+                response_ids = [str(r.id) for r in responses if r.id]
+                
+                if response_ids:
+                    items_result = self.client.table("response_items")\
+                        .select("*")\
+                        .in_("response_id", response_ids)\
+                        .execute()
+                    
+                    # items를 응답별로 그룹화
+                    items_by_response = {}
+                    for item_data in items_result.data:
+                        response_id = item_data["response_id"]
+                        if response_id not in items_by_response:
+                            items_by_response[response_id] = []
+                        items_by_response[response_id].append(self._map_to_response_item(item_data))
+                    
+                    # 응답에 items 할당
+                    for response in responses:
+                        if response.id:
+                            response.items = items_by_response.get(str(response.id), [])
             
             return responses
         except Exception as e:

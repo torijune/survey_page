@@ -28,6 +28,11 @@ class LikertConfigRequest(BaseModel):
     rows: List[Any] = []  # 문자열 또는 {text, image_url, style} 객체
 
 
+class RankingConfigRequest(BaseModel):
+    max_ranks: int = 2  # 최대 몇 개까지 선택할 수 있는지 (예: 1순위, 2순위)
+    rank_labels: List[str] = ["1순위", "2순위"]  # 순위 레이블 (예: ["1순위", "2순위"])
+
+
 class QuestionOptionRequest(BaseModel):
     label: str
     value: str
@@ -37,15 +42,17 @@ class QuestionOptionRequest(BaseModel):
 
 class QuestionCreateRequest(BaseModel):
     section_id: str
-    type: str  # single_choice, multiple_choice, likert, short_text, long_text, number, date, dropdown
+    type: str  # single_choice, multiple_choice, likert, short_text, long_text, number, date, dropdown, ranking
     title: str
     description: Optional[str] = None
     required: bool = False
     order_index: int = 0
     is_hidden: bool = False
+    question_number: Optional[str] = None  # 질문 넘버링 (SQ1, SQ2, A1, A2, B1, B2 등)
     validation_rules: Optional[ValidationRulesRequest] = None
     conditional_logic: Optional[ConditionalLogicRequest] = None
     likert_config: Optional[LikertConfigRequest] = None
+    ranking_config: Optional[RankingConfigRequest] = None
     options: Optional[List[QuestionOptionRequest]] = None
 
 
@@ -56,9 +63,11 @@ class QuestionUpdateRequest(BaseModel):
     required: Optional[bool] = None
     order_index: Optional[int] = None
     is_hidden: Optional[bool] = None
+    question_number: Optional[str] = None  # 질문 넘버링 (SQ1, SQ2, A1, A2, B1, B2 등)
     validation_rules: Optional[ValidationRulesRequest] = None
     conditional_logic: Optional[ConditionalLogicRequest] = None
     likert_config: Optional[LikertConfigRequest] = None
+    ranking_config: Optional[RankingConfigRequest] = None
     options: Optional[List[QuestionOptionRequest]] = None
 
 
@@ -128,9 +137,11 @@ class QuestionResponse(BaseModel):
     required: bool
     order_index: int
     is_hidden: bool = False
+    question_number: Optional[str] = None  # 질문 넘버링 (SQ1, SQ2, A1, A2, B1, B2 등)
     validation_rules: Optional[Dict[str, Any]] = None
     conditional_logic: Optional[Dict[str, Any]] = None
     likert_config: Optional[Dict[str, Any]] = None
+    ranking_config: Optional[Dict[str, Any]] = None
     options: List[QuestionOptionResponse] = []
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None

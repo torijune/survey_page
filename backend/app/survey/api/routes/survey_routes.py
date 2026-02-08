@@ -34,7 +34,8 @@ from ...infra.external.supabase_client import survey_supabase_client
 
 # ==================== Survey Endpoints ====================
 
-@router.get("/", response_model=SurveyListResponse)
+@router.get("", response_model=SurveyListResponse)
+@router.get("/", response_model=SurveyListResponse, include_in_schema=False)
 async def get_surveys(status: Optional[str] = Query(None)):
     """설문 목록 조회"""
     try:
@@ -48,7 +49,8 @@ async def get_surveys(status: Optional[str] = Query(None)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/", response_model=SurveyResponse)
+@router.post("", response_model=SurveyResponse)
+@router.post("/", response_model=SurveyResponse, include_in_schema=False)
 async def create_survey(request: SurveyCreateRequest):
     """설문 생성"""
     try:
@@ -298,6 +300,17 @@ async def get_response_statistics(survey_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.delete("/responses/{response_id}")
+async def delete_response(response_id: str):
+    """응답 삭제"""
+    try:
+        await response_service.delete_response(response_id)
+        return {"message": "응답이 삭제되었습니다."}
+    except Exception as e:
+        logger.error(f"응답 삭제 실패: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/{survey_id}/responses/download")
 async def download_responses(survey_id: str, format: str = Query("xlsx")):
     """응답 다운로드 (CSV/XLSX)"""
@@ -396,10 +409,22 @@ async def import_survey_from_pdf(file: UploadFile = File(...)):
         )
         survey = await survey_service.create_survey(survey_request)
         
+        # 기본 섹션 삭제 (create_survey에서 자동 생성된 것)
+        from uuid import UUID
+        existing_sections = await survey_service.survey_repository.get_sections_by_survey_id(survey.id)
+        if existing_sections:
+            section_ids = [s.id for s in existing_sections if s.id]
+            await survey_service.survey_repository.delete_sections_batch(section_ids)
+        
         total_questions = 0
         sections_preview = []
         
-        # 섹션 및 문항 생성
+        # 배치 생성을 위한 데이터 준비
+        from ...domain.entities import Section, Question, QuestionType, QuestionOption
+        sections_to_create = []
+        questions_to_create = []  # (section_index, question_data, order_index)
+        all_options_to_create = []  # (question_index_in_batch, options)
+        
         section_order = 0
         for section_data in survey_structure.get("sections", []):
             questions = section_data.get("questions", [])
@@ -412,7 +437,6 @@ async def import_survey_from_pdf(file: UploadFile = File(...)):
             valid_questions = []
             for question_data in questions:
                 q_title = question_data.get("title", "").strip()
-                # 제목이 있고 빈 문자열이 아닌 문항만 포함
                 if q_title:
                     valid_questions.append(question_data)
             
@@ -420,48 +444,108 @@ async def import_survey_from_pdf(file: UploadFile = File(...)):
             if len(valid_questions) == 0:
                 continue
             
-            # 섹션 생성
-            section_request = SectionCreateRequest(
-                survey_id=str(survey.id),
+            # 섹션 데이터 준비
+            sections_to_create.append(Section(
+                survey_id=survey.id,
                 title=section_data.get("title", ""),
                 description=section_data.get("description", ""),
                 order_index=section_order,
-            )
-            section = await survey_service.create_section(section_request)
+            ))
             
-            question_count = 0
-            
-            # 문항 생성
+            # 질문 데이터 준비
             for q_idx, question_data in enumerate(valid_questions):
-                question_request = QuestionCreateRequest(
-                    section_id=str(section.id),
-                    type=question_data.get("type", "short_text"),
+                questions_to_create.append((
+                    section_order,  # section_index
+                    question_data,
+                    q_idx,  # order_index
+                ))
+                total_questions += 1
+            
+            sections_preview.append(PDFImportSectionPreview(
+                title=section_data.get("title", f"섹션 {section_order + 1}"),
+                question_count=len(valid_questions),
+            ))
+            section_order += 1
+        
+        # 배치로 모든 섹션 생성
+        if sections_to_create:
+            created_sections = await survey_service.survey_repository.create_sections_batch(sections_to_create)
+            
+            # 섹션 ID 매핑 (section_order -> section_id)
+            section_id_map = {i: s.id for i, s in enumerate(created_sections)}
+            
+            # 질문 데이터 준비 (섹션 ID 매핑)
+            questions_entities = []
+            for section_idx, question_data, order_idx in questions_to_create:
+                section_id = section_id_map[section_idx]
+                
+                # LikertConfig 변환
+                likert_config = None
+                if question_data.get("likert_config"):
+                    from ...domain.entities import LikertConfig, LikertRowItem
+                    likert_data = question_data.get("likert_config")
+                    rows = []
+                    for row_item in likert_data.get("rows", []):
+                        if isinstance(row_item, dict):
+                            rows.append(LikertRowItem.from_dict(row_item))
+                        else:
+                            rows.append(LikertRowItem(text=str(row_item)))
+                    
+                    likert_config = LikertConfig(
+                        scale_min=likert_data.get("scale_min", 1),
+                        scale_max=likert_data.get("scale_max", 5),
+                        labels=likert_data.get("labels", []),
+                        rows=rows,
+                    )
+                
+                # RankingConfig 변환
+                ranking_config = None
+                if question_data.get("ranking_config"):
+                    from ...domain.entities import RankingConfig
+                    ranking_data = question_data.get("ranking_config")
+                    ranking_config = RankingConfig.from_dict(ranking_data)
+                
+                questions_entities.append(Question(
+                    section_id=section_id,
+                    type=QuestionType(question_data.get("type", "short_text")),
                     title=question_data.get("title", ""),
                     description=question_data.get("description", ""),
                     required=question_data.get("required", False),
-                    order_index=q_idx,
-                    options=[
-                        {
-                            "label": opt.get("label", ""),
-                            "value": opt.get("value", ""),
-                            "order_index": opt.get("order_index", 0),
-                            "allow_other": opt.get("allow_other", False),
-                        }
-                        for opt in question_data.get("options", [])
-                    ] if question_data.get("options") else None,
-                    likert_config=question_data.get("likert_config"),
-                )
-                await survey_service.create_question(question_request)
-                question_count += 1
-                total_questions += 1
-            
-            # 문항이 생성된 섹션만 미리보기에 추가
-            if question_count > 0:
-                sections_preview.append(PDFImportSectionPreview(
-                    title=section_data.get("title", f"섹션 {section_order + 1}"),
-                    question_count=question_count,
+                    order_index=order_idx,
+                    question_number=question_data.get("question_number"),
+                    likert_config=likert_config,
+                    ranking_config=ranking_config,
                 ))
-                section_order += 1
+                
+                # 옵션 데이터 준비
+                if question_data.get("options"):
+                    options = [
+                        QuestionOption(
+                            question_id=None,  # 질문 생성 후 설정
+                            label=opt.get("label", ""),
+                            value=opt.get("value", ""),
+                            order_index=opt.get("order_index", 0),
+                            allow_other=opt.get("allow_other", False),
+                        )
+                        for opt in question_data.get("options", [])
+                    ]
+                    all_options_to_create.append((len(questions_entities) - 1, options))
+            
+            # 배치로 모든 질문 생성
+            if questions_entities:
+                created_questions = await survey_service.survey_repository.create_questions_batch(questions_entities)
+                
+                # 옵션 생성 (질문 ID 매핑)
+                all_options_entities = []
+                for question_idx, options in all_options_to_create:
+                    question_id = created_questions[question_idx].id
+                    for opt in options:
+                        opt.question_id = question_id
+                        all_options_entities.append(opt)
+                
+                # 배치로 모든 옵션 생성
+                if all_options_entities:
+                    await survey_service.survey_repository.create_question_options(all_options_entities)
         
         logger.info(f"PDF 설문 가져오기 완료: 설문 ID {survey.id}, 섹션 {len(sections_preview)}개, 문항 {total_questions}개")
         
@@ -503,11 +587,12 @@ async def update_survey_from_pdf(survey_id: str, file: UploadFile = File(...)):
         # PDF 파싱
         survey_structure = await pdf_parser.parse_survey_from_pdf(file)
         
-        # 기존 섹션 모두 삭제 (CASCADE로 문항도 자동 삭제됨)
+        # 기존 섹션 모두 삭제 (CASCADE로 문항도 자동 삭제됨) - 병렬 처리로 최적화
         from uuid import UUID
         existing_sections = await survey_service.survey_repository.get_sections_by_survey_id(UUID(survey_id))
-        for section in existing_sections:
-            await survey_service.delete_section(str(section.id))
+        if existing_sections:
+            section_ids = [s.id for s in existing_sections if s.id]
+            await survey_service.survey_repository.delete_sections_batch(section_ids)
         
         logger.info(f"기존 섹션 {len(existing_sections)}개 삭제 완료")
         
@@ -521,7 +606,12 @@ async def update_survey_from_pdf(survey_id: str, file: UploadFile = File(...)):
         total_questions = 0
         sections_preview = []
         
-        # 섹션 및 문항 생성
+        # 배치 생성을 위한 데이터 준비
+        from ...domain.entities import Section, Question, QuestionType, QuestionOption
+        sections_to_create = []
+        questions_to_create = []  # (section_index, question_data, order_index)
+        all_options_to_create = []  # (question_index_in_batch, options)
+        
         section_order = 0
         for section_data in survey_structure.get("sections", []):
             questions = section_data.get("questions", [])
@@ -534,7 +624,6 @@ async def update_survey_from_pdf(survey_id: str, file: UploadFile = File(...)):
             valid_questions = []
             for question_data in questions:
                 q_title = question_data.get("title", "").strip()
-                # 제목이 있고 빈 문자열이 아닌 문항만 포함
                 if q_title:
                     valid_questions.append(question_data)
             
@@ -542,48 +631,108 @@ async def update_survey_from_pdf(survey_id: str, file: UploadFile = File(...)):
             if len(valid_questions) == 0:
                 continue
             
-            # 섹션 생성
-            section_request = SectionCreateRequest(
-                survey_id=survey_id,
+            # 섹션 데이터 준비
+            sections_to_create.append(Section(
+                survey_id=UUID(survey_id),
                 title=section_data.get("title", ""),
                 description=section_data.get("description", ""),
                 order_index=section_order,
-            )
-            section = await survey_service.create_section(section_request)
+            ))
             
-            question_count = 0
-            
-            # 문항 생성
+            # 질문 데이터 준비
             for q_idx, question_data in enumerate(valid_questions):
-                question_request = QuestionCreateRequest(
-                    section_id=str(section.id),
-                    type=question_data.get("type", "short_text"),
+                questions_to_create.append((
+                    section_order,  # section_index
+                    question_data,
+                    q_idx,  # order_index
+                ))
+                total_questions += 1
+            
+            sections_preview.append(PDFImportSectionPreview(
+                title=section_data.get("title", f"섹션 {section_order + 1}"),
+                question_count=len(valid_questions),
+            ))
+            section_order += 1
+        
+        # 배치로 모든 섹션 생성
+        if sections_to_create:
+            created_sections = await survey_service.survey_repository.create_sections_batch(sections_to_create)
+            
+            # 섹션 ID 매핑 (section_order -> section_id)
+            section_id_map = {i: s.id for i, s in enumerate(created_sections)}
+            
+            # 질문 데이터 준비 (섹션 ID 매핑)
+            questions_entities = []
+            for section_idx, question_data, order_idx in questions_to_create:
+                section_id = section_id_map[section_idx]
+                
+                # LikertConfig 변환
+                likert_config = None
+                if question_data.get("likert_config"):
+                    from ...domain.entities import LikertConfig, LikertRowItem
+                    likert_data = question_data.get("likert_config")
+                    rows = []
+                    for row_item in likert_data.get("rows", []):
+                        if isinstance(row_item, dict):
+                            rows.append(LikertRowItem.from_dict(row_item))
+                        else:
+                            rows.append(LikertRowItem(text=str(row_item)))
+                    
+                    likert_config = LikertConfig(
+                        scale_min=likert_data.get("scale_min", 1),
+                        scale_max=likert_data.get("scale_max", 5),
+                        labels=likert_data.get("labels", []),
+                        rows=rows,
+                    )
+                
+                # RankingConfig 변환
+                ranking_config = None
+                if question_data.get("ranking_config"):
+                    from ...domain.entities import RankingConfig
+                    ranking_data = question_data.get("ranking_config")
+                    ranking_config = RankingConfig.from_dict(ranking_data)
+                
+                questions_entities.append(Question(
+                    section_id=section_id,
+                    type=QuestionType(question_data.get("type", "short_text")),
                     title=question_data.get("title", ""),
                     description=question_data.get("description", ""),
                     required=question_data.get("required", False),
-                    order_index=q_idx,
-                    options=[
-                        {
-                            "label": opt.get("label", ""),
-                            "value": opt.get("value", ""),
-                            "order_index": opt.get("order_index", 0),
-                            "allow_other": opt.get("allow_other", False),
-                        }
-                        for opt in question_data.get("options", [])
-                    ] if question_data.get("options") else None,
-                    likert_config=question_data.get("likert_config"),
-                )
-                await survey_service.create_question(question_request)
-                question_count += 1
-                total_questions += 1
-            
-            # 문항이 생성된 섹션만 미리보기에 추가
-            if question_count > 0:
-                sections_preview.append(PDFImportSectionPreview(
-                    title=section_data.get("title", f"섹션 {section_order + 1}"),
-                    question_count=question_count,
+                    order_index=order_idx,
+                    question_number=question_data.get("question_number"),
+                    likert_config=likert_config,
+                    ranking_config=ranking_config,
                 ))
-                section_order += 1
+                
+                # 옵션 데이터 준비
+                if question_data.get("options"):
+                    options = [
+                        QuestionOption(
+                            question_id=None,  # 질문 생성 후 설정
+                            label=opt.get("label", ""),
+                            value=opt.get("value", ""),
+                            order_index=opt.get("order_index", 0),
+                            allow_other=opt.get("allow_other", False),
+                        )
+                        for opt in question_data.get("options", [])
+                    ]
+                    all_options_to_create.append((len(questions_entities) - 1, options))
+            
+            # 배치로 모든 질문 생성
+            if questions_entities:
+                created_questions = await survey_service.survey_repository.create_questions_batch(questions_entities)
+                
+                # 옵션 생성 (질문 ID 매핑)
+                all_options_entities = []
+                for question_idx, options in all_options_to_create:
+                    question_id = created_questions[question_idx].id
+                    for opt in options:
+                        opt.question_id = question_id
+                        all_options_entities.append(opt)
+                
+                # 배치로 모든 옵션 생성
+                if all_options_entities:
+                    await survey_service.survey_repository.create_question_options(all_options_entities)
         
         # 업데이트된 설문 정보 가져오기
         updated_survey = await survey_service.get_survey(survey_id, include_details=False)
@@ -654,6 +803,7 @@ def _map_question_response(question) -> QuestionResponse:
         required=question.required,
         order_index=question.order_index,
         is_hidden=question.is_hidden,
+        question_number=question.question_number,
         validation_rules=question.validation_rules.to_dict() if question.validation_rules else None,
         conditional_logic=question.conditional_logic.to_dict() if question.conditional_logic else None,
         likert_config=question.likert_config.to_dict() if question.likert_config else None,

@@ -66,14 +66,29 @@ class SurveyRepository(ABC):
         pass
     
     @abstractmethod
+    async def delete_sections_batch(self, section_ids: List[UUID]) -> bool:
+        """여러 섹션을 병렬로 삭제 (배치 최적화)"""
+        pass
+    
+    @abstractmethod
     async def reorder_sections(self, survey_id: UUID, section_orders: List[dict]) -> bool:
         """섹션 순서 변경"""
+        pass
+    
+    @abstractmethod
+    async def create_sections_batch(self, sections: List[Section]) -> List[Section]:
+        """여러 섹션을 한 번에 생성 (배치 최적화)"""
         pass
     
     # Question CRUD
     @abstractmethod
     async def create_question(self, question: Question) -> Question:
         """문항 생성"""
+        pass
+    
+    @abstractmethod
+    async def create_questions_batch(self, questions: List[Question]) -> List[Question]:
+        """여러 질문을 한 번에 생성 (배치 최적화)"""
         pass
     
     @abstractmethod

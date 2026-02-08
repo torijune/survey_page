@@ -1,11 +1,12 @@
 import logging
+import asyncio
 from typing import List, Optional, Dict, Any
 from uuid import UUID
 from datetime import datetime
 
 from ...domain.entities import (
     Survey, SurveyStatus, Section, Question, QuestionType,
-    QuestionOption, ValidationRules, ConditionalLogic, LikertConfig
+    QuestionOption, ValidationRules, ConditionalLogic, LikertConfig, RankingConfig
 )
 from ...domain.repositories import SurveyRepository
 from ..external.supabase_client import survey_supabase_client
@@ -63,11 +64,60 @@ class SurveyRepositoryImpl(SurveyRepository):
             survey = self._map_to_survey(result.data[0])
             
             if include_details:
+                # 섹션 조회
                 survey.sections = await self.get_sections_by_survey_id(survey_id)
+                
+                if not survey.sections:
+                    # 응답 수 조회
+                    count_result = self.client.table("responses").select("id", count="exact").eq("survey_id", str(survey_id)).eq("is_complete", True).execute()
+                    survey.response_count = count_result.count if count_result.count else 0
+                    return survey
+                
+                # 모든 섹션 ID 수집
+                section_ids = [str(s.id) for s in survey.sections if s.id]
+                
+                # 배치로 모든 질문 조회 (한 번의 쿼리)
+                all_questions_result = self.client.table("questions")\
+                    .select("*")\
+                    .in_("section_id", section_ids)\
+                    .order("section_id, order_index")\
+                    .execute()
+                
+                # 질문을 섹션별로 그룹화
+                questions_by_section = {}
+                for q_data in all_questions_result.data:
+                    section_id = q_data["section_id"]
+                    if section_id not in questions_by_section:
+                        questions_by_section[section_id] = []
+                    questions_by_section[section_id].append(self._map_to_question(q_data))
+                
+                # 섹션에 질문 할당
+                all_question_ids = []
                 for section in survey.sections:
-                    section.questions = await self.get_questions_by_section_id(section.id)
-                    for question in section.questions:
-                        question.options = await self.get_options_by_question_id(question.id)
+                    section.questions = questions_by_section.get(str(section.id), [])
+                    all_question_ids.extend([str(q.id) for q in section.questions if q.id])
+                
+                # 배치로 모든 옵션 조회 (한 번의 쿼리)
+                if all_question_ids:
+                    all_options_result = self.client.table("question_options")\
+                        .select("*")\
+                        .in_("question_id", all_question_ids)\
+                        .order("question_id, order_index")\
+                        .execute()
+                    
+                    # 옵션을 질문별로 그룹화
+                    options_by_question = {}
+                    for opt_data in all_options_result.data:
+                        question_id = opt_data["question_id"]
+                        if question_id not in options_by_question:
+                            options_by_question[question_id] = []
+                        options_by_question[question_id].append(self._map_to_option(opt_data))
+                    
+                    # 질문에 옵션 할당
+                    for section in survey.sections:
+                        for question in section.questions:
+                            if question.id:
+                                question.options = options_by_question.get(str(question.id), [])
             
             # 응답 수 조회
             count_result = self.client.table("responses").select("id", count="exact").eq("survey_id", str(survey_id)).eq("is_complete", True).execute()
@@ -89,11 +139,57 @@ class SurveyRepositoryImpl(SurveyRepository):
             survey = self._map_to_survey(result.data[0])
             
             if include_details:
+                # 섹션 조회
                 survey.sections = await self.get_sections_by_survey_id(survey.id)
+                
+                if not survey.sections:
+                    return survey
+                
+                # 모든 섹션 ID 수집
+                section_ids = [str(s.id) for s in survey.sections if s.id]
+                
+                # 배치로 모든 질문 조회 (한 번의 쿼리)
+                all_questions_result = self.client.table("questions")\
+                    .select("*")\
+                    .in_("section_id", section_ids)\
+                    .order("section_id, order_index")\
+                    .execute()
+                
+                # 질문을 섹션별로 그룹화
+                questions_by_section = {}
+                for q_data in all_questions_result.data:
+                    section_id = q_data["section_id"]
+                    if section_id not in questions_by_section:
+                        questions_by_section[section_id] = []
+                    questions_by_section[section_id].append(self._map_to_question(q_data))
+                
+                # 섹션에 질문 할당
+                all_question_ids = []
                 for section in survey.sections:
-                    section.questions = await self.get_questions_by_section_id(section.id)
-                    for question in section.questions:
-                        question.options = await self.get_options_by_question_id(question.id)
+                    section.questions = questions_by_section.get(str(section.id), [])
+                    all_question_ids.extend([str(q.id) for q in section.questions if q.id])
+                
+                # 배치로 모든 옵션 조회 (한 번의 쿼리)
+                if all_question_ids:
+                    all_options_result = self.client.table("question_options")\
+                        .select("*")\
+                        .in_("question_id", all_question_ids)\
+                        .order("question_id, order_index")\
+                        .execute()
+                    
+                    # 옵션을 질문별로 그룹화
+                    options_by_question = {}
+                    for opt_data in all_options_result.data:
+                        question_id = opt_data["question_id"]
+                        if question_id not in options_by_question:
+                            options_by_question[question_id] = []
+                        options_by_question[question_id].append(self._map_to_option(opt_data))
+                    
+                    # 질문에 옵션 할당
+                    for section in survey.sections:
+                        for question in section.questions:
+                            if question.id:
+                                question.options = options_by_question.get(str(question.id), [])
             
             return survey
         except Exception as e:
@@ -112,10 +208,26 @@ class SurveyRepositoryImpl(SurveyRepository):
             
             surveys = [self._map_to_survey(row) for row in result.data]
             
-            # 각 설문의 응답 수 조회
-            for survey in surveys:
-                count_result = self.client.table("responses").select("id", count="exact").eq("survey_id", str(survey.id)).eq("is_complete", True).execute()
-                survey.response_count = count_result.count if count_result.count else 0
+            # 각 설문의 응답 수를 병렬로 조회
+            if surveys:
+                survey_ids = [str(s.id) for s in surveys if s.id]
+                
+                # 배치로 모든 응답 수 조회 (한 번의 쿼리)
+                # Supabase는 count를 배치로 할 수 없으므로 병렬 처리
+                async def get_count(survey_id: str):
+                    count_result = self.client.table("responses").select("id", count="exact").eq("survey_id", survey_id).eq("is_complete", True).execute()
+                    return survey_id, count_result.count if count_result.count else 0
+                
+                count_tasks = [get_count(sid) for sid in survey_ids]
+                count_results = await asyncio.gather(*count_tasks)
+                
+                # 결과를 딕셔너리로 변환
+                count_dict = {sid: count for sid, count in count_results}
+                
+                # 각 설문에 응답 수 할당
+                for survey in surveys:
+                    if survey.id:
+                        survey.response_count = count_dict.get(str(survey.id), 0)
             
             return surveys
         except Exception as e:
@@ -192,6 +304,31 @@ class SurveyRepositoryImpl(SurveyRepository):
             logger.error(f"섹션 생성 실패: {e}")
             raise
     
+    async def create_sections_batch(self, sections: List[Section]) -> List[Section]:
+        """여러 섹션을 한 번에 생성 (배치 최적화)"""
+        self._ensure_client()
+        try:
+            if not sections:
+                return []
+            
+            data = [
+                {
+                    "survey_id": str(section.survey_id),
+                    "title": section.title,
+                    "description": section.description,
+                    "order_index": section.order_index,
+                    "is_conditional": section.is_conditional,
+                    "conditional_logic": section.conditional_logic,
+                }
+                for section in sections
+            ]
+            
+            result = self.client.table("sections").insert(data).execute()
+            return [self._map_to_section(row) for row in result.data]
+        except Exception as e:
+            logger.error(f"섹션 배치 생성 실패: {e}")
+            raise
+    
     async def get_sections_by_survey_id(self, survey_id: UUID) -> List[Section]:
         self._ensure_client()
         try:
@@ -230,11 +367,32 @@ class SurveyRepositoryImpl(SurveyRepository):
             logger.error(f"섹션 삭제 실패: {e}")
             raise
     
+    async def delete_sections_batch(self, section_ids: List[UUID]) -> bool:
+        """여러 섹션을 병렬로 삭제 (배치 최적화)"""
+        self._ensure_client()
+        try:
+            if not section_ids:
+                return True
+            
+            async def delete_one(section_id: UUID):
+                self.client.table("sections").delete().eq("id", str(section_id)).execute()
+            
+            tasks = [delete_one(sid) for sid in section_ids]
+            await asyncio.gather(*tasks)
+            return True
+        except Exception as e:
+            logger.error(f"섹션 배치 삭제 실패: {e}")
+            raise
+    
     async def reorder_sections(self, survey_id: UUID, section_orders: List[dict]) -> bool:
         self._ensure_client()
         try:
-            for order in section_orders:
+            # 병렬 처리로 최적화
+            async def update_order(order: dict):
                 self.client.table("sections").update({"order_index": order["order_index"]}).eq("id", order["id"]).execute()
+            
+            tasks = [update_order(order) for order in section_orders]
+            await asyncio.gather(*tasks)
             return True
         except Exception as e:
             logger.error(f"섹션 순서 변경 실패: {e}")
@@ -253,9 +411,11 @@ class SurveyRepositoryImpl(SurveyRepository):
                 "required": question.required,
                 "order_index": question.order_index,
                 "is_hidden": question.is_hidden,
+                "question_number": question.question_number,
                 "validation_rules": question.validation_rules.to_dict() if question.validation_rules else None,
                 "conditional_logic": question.conditional_logic.to_dict() if question.conditional_logic else None,
                 "likert_config": question.likert_config.to_dict() if question.likert_config else None,
+                "ranking_config": question.ranking_config.to_dict() if question.ranking_config else None,
             }
             
             result = self.client.table("questions").insert(data).execute()
@@ -265,6 +425,37 @@ class SurveyRepositoryImpl(SurveyRepository):
             raise Exception("문항 생성 실패")
         except Exception as e:
             logger.error(f"문항 생성 실패: {e}")
+            raise
+    
+    async def create_questions_batch(self, questions: List[Question]) -> List[Question]:
+        """여러 질문을 한 번에 생성 (배치 최적화)"""
+        self._ensure_client()
+        try:
+            if not questions:
+                return []
+            
+            data = [
+                {
+                    "section_id": str(question.section_id),
+                    "type": question.type.value,
+                    "title": question.title,
+                    "description": question.description,
+                    "required": question.required,
+                    "order_index": question.order_index,
+                    "is_hidden": question.is_hidden,
+                    "question_number": question.question_number,
+                    "validation_rules": question.validation_rules.to_dict() if question.validation_rules else None,
+                    "conditional_logic": question.conditional_logic.to_dict() if question.conditional_logic else None,
+                    "likert_config": question.likert_config.to_dict() if question.likert_config else None,
+                    "ranking_config": question.ranking_config.to_dict() if question.ranking_config else None,
+                }
+                for question in questions
+            ]
+            
+            result = self.client.table("questions").insert(data).execute()
+            return [self._map_to_question(row) for row in result.data]
+        except Exception as e:
+            logger.error(f"문항 배치 생성 실패: {e}")
             raise
     
     async def get_questions_by_section_id(self, section_id: UUID) -> List[Question]:
@@ -286,9 +477,11 @@ class SurveyRepositoryImpl(SurveyRepository):
                 "required": question.required,
                 "order_index": question.order_index,
                 "is_hidden": question.is_hidden,
+                "question_number": question.question_number,
                 "validation_rules": question.validation_rules.to_dict() if question.validation_rules else None,
                 "conditional_logic": question.conditional_logic.to_dict() if question.conditional_logic else None,
                 "likert_config": question.likert_config.to_dict() if question.likert_config else None,
+                "ranking_config": question.ranking_config.to_dict() if question.ranking_config else None,
             }
             
             result = self.client.table("questions").update(data).eq("id", str(question.id)).execute()
@@ -312,8 +505,12 @@ class SurveyRepositoryImpl(SurveyRepository):
     async def reorder_questions(self, section_id: UUID, question_orders: List[dict]) -> bool:
         self._ensure_client()
         try:
-            for order in question_orders:
+            # 병렬 처리로 최적화
+            async def update_order(order: dict):
                 self.client.table("questions").update({"order_index": order["order_index"]}).eq("id", order["id"]).execute()
+            
+            tasks = [update_order(order) for order in question_orders]
+            await asyncio.gather(*tasks)
             return True
         except Exception as e:
             logger.error(f"문항 순서 변경 실패: {e}")
@@ -420,9 +617,11 @@ class SurveyRepositoryImpl(SurveyRepository):
             required=data.get("required", False),
             order_index=data.get("order_index", 0),
             is_hidden=data.get("is_hidden", False),
+            question_number=data.get("question_number"),
             validation_rules=ValidationRules.from_dict(data.get("validation_rules")),
             conditional_logic=ConditionalLogic.from_dict(data.get("conditional_logic")),
             likert_config=LikertConfig.from_dict(data.get("likert_config")),
+            ranking_config=RankingConfig.from_dict(data.get("ranking_config")),
             created_at=datetime.fromisoformat(data["created_at"].replace("Z", "+00:00")) if data.get("created_at") else None,
             updated_at=datetime.fromisoformat(data["updated_at"].replace("Z", "+00:00")) if data.get("updated_at") else None,
         )

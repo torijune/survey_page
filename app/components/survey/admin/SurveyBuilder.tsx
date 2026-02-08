@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Box,
   Button,
@@ -39,6 +39,7 @@ import {
   ContentCopy,
   Launch,
   Settings,
+  AccountTree,
 } from '@mui/icons-material';
 import { useRouter } from 'next/router';
 import {
@@ -85,10 +86,17 @@ export default function SurveyBuilder({ surveyId }: SurveyBuilderProps) {
   const [isDragging, setIsDragging] = useState(false);
   const pdfInputRef = useRef<HTMLInputElement>(null);
   
+  // 모든 질문 목록 (변수 삽입용) - useMemo로 최적화
+  const allQuestions = useMemo(() => {
+    if (!survey) return [];
+    return survey.sections.flatMap(s => s.questions).filter(q => q.id);
+  }, [survey]);
+  
   // 설문 로드
   useEffect(() => {
     const loadSurvey = async () => {
       try {
+        setLoading(true);
         const data = await getSurvey(surveyId);
         // 제목이 "새 설문"이면 빈 문자열로 변환
         if (data.title === '새 설문') {
@@ -402,36 +410,45 @@ export default function SurveyBuilder({ surveyId }: SurveyBuilderProps) {
         organization_subtitle: survey.organization_subtitle,
       });
       
-      // 각 섹션 저장
-      for (const section of survey.sections) {
-        if (section.id) {
-          await updateSection(section.id, {
+      // 모든 섹션 업데이트를 병렬로 처리
+      const sectionUpdatePromises = survey.sections
+        .filter(section => section.id)
+        .map(section => 
+          updateSection(section.id!, {
             title: section.title,
             description: section.description,
             order_index: section.order_index,
-          });
-        }
-        
-        // 각 문항 저장
+          })
+        );
+      await Promise.all(sectionUpdatePromises);
+      
+      // 모든 질문 업데이트를 병렬로 처리
+      const questionUpdatePromises: Promise<any>[] = [];
+      for (const section of survey.sections) {
         for (const question of section.questions) {
           if (question.id) {
             // 제목이 "새 문항"이면 빈 문자열로 저장
             const titleToSave = question.title === '새 문항' ? '' : question.title;
-            await updateQuestion(question.id, {
-              type: question.type,
-              title: titleToSave,
-              description: question.description,
-              required: question.required,
-              order_index: question.order_index,
-              is_hidden: question.is_hidden,
-              validation_rules: question.validation_rules,
-              conditional_logic: question.conditional_logic,
-              likert_config: question.likert_config,
-              options: question.options,
-            });
+            questionUpdatePromises.push(
+              updateQuestion(question.id, {
+                type: question.type,
+                title: titleToSave,
+                description: question.description,
+                required: question.required,
+                order_index: question.order_index,
+                is_hidden: question.is_hidden,
+                question_number: question.question_number,
+                validation_rules: question.validation_rules,
+                conditional_logic: question.conditional_logic || null,
+                likert_config: question.likert_config,
+                ranking_config: question.ranking_config || null,
+                options: question.options,
+              })
+            );
           }
         }
       }
+      await Promise.all(questionUpdatePromises);
       
       showSnackbar('저장되었습니다.', 'success');
     } catch (e: any) {
@@ -648,7 +665,7 @@ export default function SurveyBuilder({ surveyId }: SurveyBuilderProps) {
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               <Tooltip title="목록으로">
                 <IconButton
-                  onClick={() => router.push('/admin/surveys')}
+                  onClick={() => router.push('/m7k9p2/surveys')}
                   sx={{
                     color: 'rgba(255,255,255,0.7)',
                     '&:hover': { color: 'white', backgroundColor: 'rgba(255,255,255,0.1)' },
@@ -703,8 +720,27 @@ export default function SurveyBuilder({ surveyId }: SurveyBuilderProps) {
               <Button
                 variant="outlined"
                 size="small"
+                startIcon={<AccountTree />}
+                onClick={() => router.push(`/m7k9p2/surveys/${surveyId}/flow`)}
+                sx={{
+                  color: 'white',
+                  borderColor: 'rgba(255,255,255,0.3)',
+                  borderRadius: 2,
+                  textTransform: 'none',
+                  fontWeight: 600,
+                  '&:hover': {
+                    borderColor: 'white',
+                    backgroundColor: 'rgba(255,255,255,0.1)',
+                  },
+                }}
+              >
+                흐름 편집
+              </Button>
+              <Button
+                variant="outlined"
+                size="small"
                 startIcon={<Visibility />}
-                onClick={() => router.push(`/admin/surveys/${surveyId}/preview`)}
+                onClick={() => router.push(`/m7k9p2/surveys/${surveyId}/preview`)}
                 sx={{
                   color: 'white',
                   borderColor: 'rgba(255,255,255,0.3)',
@@ -950,6 +986,7 @@ export default function SurveyBuilder({ surveyId }: SurveyBuilderProps) {
               onQuestionChange={(qIndex, q) => handleQuestionChange(sIndex, qIndex, q)}
               onSaveQuestion={(qIndex) => handleSaveQuestion(sIndex, qIndex)}
               onToggleQuestionHide={(qIndex) => handleToggleQuestionHide(sIndex, qIndex)}
+              allQuestions={allQuestions}
             />
           ))}
         </Box>

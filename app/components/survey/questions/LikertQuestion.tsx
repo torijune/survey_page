@@ -113,16 +113,18 @@ export default function LikertQuestion({
                     {scale}
                   </Typography>
                   {labels[idx] && (
-                    <Box
+                    <Typography
+                      variant="caption"
                       sx={{
                         fontSize: '0.75rem',
                         lineHeight: 1.4,
                         color: 'text.secondary',
                         whiteSpace: 'pre-wrap',
+                        display: 'block',
                       }}
                     >
-                      <RichTextDisplay html={labels[idx]} />
-                    </Box>
+                      {labels[idx]}
+                    </Typography>
                   )}
                 </TableCell>
               ))}

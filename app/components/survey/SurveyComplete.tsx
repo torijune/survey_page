@@ -1,15 +1,12 @@
 import React from 'react';
-import { Box, Container, Typography, Paper, Button } from '@mui/material';
-import { CheckCircle, Home } from '@mui/icons-material';
-import { useRouter } from 'next/router';
+import { Box, Container, Typography, Paper } from '@mui/material';
+import { CheckCircle } from '@mui/icons-material';
 
 interface SurveyCompleteProps {
   surveyTitle: string;
 }
 
 export default function SurveyComplete({ surveyTitle }: SurveyCompleteProps) {
-  const router = useRouter();
-  
   return (
     <Container maxWidth="sm" sx={{ py: 8 }}>
       <Paper
@@ -41,20 +38,11 @@ export default function SurveyComplete({ surveyTitle }: SurveyCompleteProps) {
           설문이 완료되었습니다!
         </Typography>
         
-        <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
+        <Typography variant="body1" color="text.secondary">
           &ldquo;{surveyTitle}&rdquo; 설문에 참여해주셔서 감사합니다.
           <br />
           소중한 응답이 정상적으로 제출되었습니다.
         </Typography>
-        
-        <Button
-          variant="contained"
-          startIcon={<Home />}
-          onClick={() => router.push('/')}
-          sx={{ borderRadius: 2, px: 4 }}
-        >
-          홈으로 돌아가기
-        </Button>
       </Paper>
     </Container>
   );

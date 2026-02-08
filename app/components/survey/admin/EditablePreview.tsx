@@ -238,6 +238,7 @@ export default function EditablePreview({
       label: '',
       value: String(currentOptions.length + 1),
       order_index: currentOptions.length,
+      allow_other: false,
     };
     newQuestions[questionIndex] = {
       ...newQuestions[questionIndex],
@@ -269,8 +270,8 @@ export default function EditablePreview({
       order_index: section.questions.length,
       is_hidden: false,
       options: [
-        { label: '선택지 1', value: '1', order_index: 0 },
-        { label: '선택지 2', value: '2', order_index: 1 },
+        { label: '선택지 1', value: '1', order_index: 0, allow_other: false },
+        { label: '선택지 2', value: '2', order_index: 1, allow_other: false },
       ],
     };
     
@@ -306,6 +307,7 @@ export default function EditablePreview({
       title: '새 섹션',
       survey_id: survey.id!,
       order_index: survey.sections.length,
+      is_conditional: false,
       questions: [],
     };
     onSurveyChange({ ...survey, sections: [...survey.sections, newSection] });
@@ -576,6 +578,55 @@ export default function EditablePreview({
             </Box>
           </Box>
         )}
+
+        {/* 순위 선택 */}
+        {question.type === 'ranking' && (
+          <Box sx={{ ml: 5, mt: 2 }}>
+            {question.options && question.options.length > 0 ? (
+              <Box>
+                {question.ranking_config?.rank_labels?.map((rankLabel, rankIndex) => (
+                  <Box
+                    key={rankIndex}
+                    sx={{
+                      mb: 2,
+                      p: 2,
+                      border: '1px solid #E5E7EB',
+                      borderRadius: 2,
+                      backgroundColor: '#F9FAFB',
+                    }}
+                  >
+                    <Typography variant="body2" fontWeight={600} sx={{ mb: 1 }}>
+                      {rankLabel} 선택
+                    </Typography>
+                    <Box
+                      sx={{
+                        p: 1.5,
+                        border: '1px dashed #D1D5DB',
+                        borderRadius: 1,
+                        backgroundColor: 'white',
+                        color: '#9CA3AF',
+                      }}
+                    >
+                      드롭다운 선택
+                    </Box>
+                  </Box>
+                ))}
+              </Box>
+            ) : (
+              <Box
+                sx={{
+                  p: 2,
+                  border: '1px dashed #D1D5DB',
+                  borderRadius: 2,
+                  backgroundColor: '#F9FAFB',
+                  color: '#9CA3AF',
+                }}
+              >
+                순위 선택 (선택지가 없습니다)
+              </Box>
+            )}
+          </Box>
+        )}
       </Paper>
     );
   };
@@ -682,29 +733,15 @@ export default function EditablePreview({
                   value={survey.organization_subtitle || ''}
                   onChange={(value) => handleSurveyChange('organization_subtitle', value)}
                   placeholder="부제목 (예: 서울특별시)"
-                  variant="body"
+                  variant="caption"
                   onStyleChange={() => {}}
-                  sx={{
-                    fontSize: '0.75rem',
-                    color: '#6B7280',
-                    display: 'block',
-                    lineHeight: 1.2,
-                    mb: 0.5,
-                  }}
                 />
                 <EditableText
                   value={survey.organization_name || ''}
                   onChange={(value) => handleSurveyChange('organization_name', value)}
                   placeholder="조직명 (예: 서울신용보증재단)"
-                  variant="body"
+                  variant="subtitle"
                   onStyleChange={() => {}}
-                  sx={{
-                    fontSize: '1rem',
-                    fontWeight: 700,
-                    color: '#3B82F6',
-                    display: 'block',
-                    lineHeight: 1.2,
-                  }}
                 />
               </Box>
             )}

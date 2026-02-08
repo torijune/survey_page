@@ -11,7 +11,8 @@ logger = logging.getLogger(__name__)
 app = FastAPI(
     title="설문조사 시스템 Backend",
     description="설문조사 생성, 배포, 응답 수집을 위한 API",
-    version="1.0.0"
+    version="1.0.0",
+    redirect_slashes=False
 )
 
 # CORS 설정 - 모든 도메인 허용

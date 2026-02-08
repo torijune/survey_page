@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, memo } from 'react';
 import {
   Box,
   Button,
@@ -23,9 +23,10 @@ interface SectionEditorProps {
   onQuestionChange: (questionIndex: number, question: Question) => void;
   onSaveQuestion?: (questionIndex: number) => void;
   onToggleQuestionHide?: (questionIndex: number) => void;
+  allQuestions?: Question[]; // 모든 질문 목록 (변수 삽입용)
 }
 
-export default function SectionEditor({
+function SectionEditor({
   section,
   sectionIndex,
   onChange,
@@ -35,8 +36,10 @@ export default function SectionEditor({
   onQuestionChange,
   onSaveQuestion,
   onToggleQuestionHide,
+  allQuestions = [],
 }: SectionEditorProps) {
-  const [expanded, setExpanded] = useState(true);
+  // 초기에는 접혀있도록 (렌더링 부담 감소)
+  const [expanded, setExpanded] = useState(false);
   
   return (
     <Paper
@@ -132,6 +135,8 @@ export default function SectionEditor({
               onSave={onSaveQuestion ? () => onSaveQuestion(qIndex) : undefined}
               onToggleHide={onToggleQuestionHide ? () => onToggleQuestionHide(qIndex) : undefined}
               isNew={!question.id}
+              allQuestions={allQuestions}
+              currentQuestionId={question.id}
             />
           ))}
           
@@ -149,3 +154,5 @@ export default function SectionEditor({
   );
 }
 
+// React.memo로 최적화 (얕은 비교 사용)
+export default memo(SectionEditor);

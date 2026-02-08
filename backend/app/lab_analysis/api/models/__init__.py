@@ -1,1 +1,0 @@
-# Lab Analysis API Models Package 

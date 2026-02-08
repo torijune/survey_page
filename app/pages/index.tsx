@@ -1,23 +1,19 @@
 import React, { useEffect, useState, useRef } from 'react';
 import {
-  Box,
+  Box, 
   Container,
-  Typography,
-  Button,
+  Typography, 
+  Button, 
   Paper,
-  Grid,
-  Card,
-  CardContent,
+  Grid, 
+  Card, 
+  CardContent, 
   CardActions,
   Chip,
   IconButton,
   CircularProgress,
   Alert,
   Divider,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemIcon,
   Avatar,
   LinearProgress,
   TextField,
@@ -31,34 +27,27 @@ import {
   Tabs,
   Tab,
   Tooltip,
-  Skeleton,
-  Badge,
   Stack,
 } from '@mui/material';
 import {
   Add,
   Assignment,
-  BarChart,
   Edit,
   Visibility,
   Delete,
-  TrendingUp,
   People,
   CheckCircle,
   PictureAsPdf,
   Search,
   MoreVert,
-  Link as LinkIcon,
   PlayArrow,
   Stop,
   Refresh,
   FolderOpen,
-  ArrowForward,
   ContentCopy,
-  Launch,
-  Analytics,
   AutoGraph,
-  KeyboardArrowRight,
+  Analytics,
+  ListAlt,
 } from '@mui/icons-material';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
@@ -432,7 +421,7 @@ export default function Dashboard() {
     setCreating(true);
     try {
       const survey = await createSurvey({ title: '' });
-      router.push(`/admin/surveys/${survey.id}/edit`);
+      router.push(`/m7k9p2/surveys/${survey.id}/edit`);
     } catch (e: any) {
       setError(e.message);
       setCreating(false);
@@ -504,7 +493,7 @@ export default function Dashboard() {
       setPdfResult(result);
       if (result.success && result.survey_id) {
         setTimeout(() => {
-          router.push(`/admin/surveys/${result.survey_id}/edit`);
+          router.push(`/m7k9p2/surveys/${result.survey_id}/edit`);
         }, 1500);
       }
     } catch (e: any) {
@@ -538,10 +527,6 @@ export default function Dashboard() {
     })
     .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
 
-  const recentSurveys = [...surveys]
-    .sort((a, b) => new Date(b.updated_at || b.created_at || 0).getTime() - new Date(a.updated_at || a.created_at || 0).getTime())
-    .slice(0, 5);
-
   return (
     <>
       <Head>
@@ -551,19 +536,19 @@ export default function Dashboard() {
       <Box sx={{ minHeight: '100vh', backgroundColor: '#F8FAFC' }}>
         {/* 헤더 */}
         <Box
-          sx={{
+                    sx={{
             background: 'linear-gradient(135deg, #0F172A 0%, #1E293B 50%, #334155 100%)',
             color: 'white',
             pt: 5,
             pb: 8,
-            position: 'relative',
-            overflow: 'hidden',
-            '&::before': {
-              content: '""',
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
+                      position: 'relative',
+                      overflow: 'hidden',
+                      '&::before': {
+                        content: '""',
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        right: 0,
               bottom: 0,
               background: 'url("data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg fill=\'%239C92AC\' fill-opacity=\'0.05\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")',
               opacity: 0.5,
@@ -575,7 +560,7 @@ export default function Dashboard() {
               <Box>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1.5 }}>
                   <Box
-                    sx={{
+          sx={{ 
                       width: 56,
                       height: 56,
                       borderRadius: 3,
@@ -591,14 +576,36 @@ export default function Dashboard() {
                   <Box>
                     <Typography variant="h4" fontWeight={800} sx={{ letterSpacing: '-0.02em' }}>
                       SurveyMachine
-                    </Typography>
+              </Typography>
                     <Typography variant="body2" sx={{ opacity: 0.7 }}>
                       설문 관리 대시보드
-                    </Typography>
-                  </Box>
-                </Box>
+              </Typography>
+            </Box>
+        </Box>
               </Box>
               <Stack direction="row" spacing={2}>
+                <Button
+                  variant="outlined"
+                  startIcon={<ListAlt />}
+                  onClick={() => router.push('/m7k9p2/surveys')}
+                  sx={{
+                    color: 'white',
+                    borderColor: 'rgba(255,255,255,0.3)',
+                    borderWidth: 1.5,
+                    borderRadius: 2.5,
+                    px: 3,
+                    py: 1.2,
+                    textTransform: 'none',
+                    fontWeight: 600,
+                    '&:hover': {
+                      borderColor: 'white',
+                      backgroundColor: 'rgba(255,255,255,0.1)',
+                      borderWidth: 1.5,
+                    },
+                  }}
+                >
+                  설문 관리
+                </Button>
                 <Button
                   variant="outlined"
                   startIcon={<PictureAsPdf />}
@@ -659,53 +666,114 @@ export default function Dashboard() {
             </Alert>
           )}
 
-          <Grid container spacing={3} sx={{ mb: 4 }}>
-            <Grid item xs={12} sm={6} lg={3}>
-              <StatCard
-                title="전체 설문"
-                value={stats.total}
-                icon={<FolderOpen sx={{ fontSize: 28, color: 'white' }} />}
-                gradient="linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%)"
-                iconBg="rgba(255,255,255,0.2)"
-              />
-            </Grid>
-            <Grid item xs={12} sm={6} lg={3}>
-              <StatCard
-                title="진행 중"
-                value={stats.active}
-                subtitle={`초안 ${stats.draft}개`}
-                icon={<PlayArrow sx={{ fontSize: 28, color: 'white' }} />}
-                gradient="linear-gradient(135deg, #10B981 0%, #059669 100%)"
-                iconBg="rgba(255,255,255,0.2)"
-              />
-            </Grid>
-            <Grid item xs={12} sm={6} lg={3}>
-              <StatCard
-                title="총 응답"
-                value={stats.totalResponses}
-                icon={<People sx={{ fontSize: 28, color: 'white' }} />}
-                gradient="linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%)"
-                iconBg="rgba(255,255,255,0.2)"
-              />
-            </Grid>
-            <Grid item xs={12} sm={6} lg={3}>
-              <StatCard
-                title="마감"
-                value={stats.closed}
-                icon={<CheckCircle sx={{ fontSize: 28, color: 'white' }} />}
-                gradient="linear-gradient(135deg, #6B7280 0%, #4B5563 100%)"
-                iconBg="rgba(255,255,255,0.2)"
-              />
-            </Grid>
-          </Grid>
+          {/* 통계 카드 + 빠른 작업 */}
+          <Box sx={{ display: 'flex', gap: 3, mb: 4, flexWrap: 'wrap' }}>
+            {/* 통계 카드들 */}
+            <Box sx={{ display: 'flex', gap: 3, flex: '1 1 auto', flexWrap: 'wrap' }}>
+              <Box sx={{ flex: '1 1 200px', minWidth: 180 }}>
+                <StatCard
+                  title="전체 설문"
+                  value={stats.total}
+                  icon={<FolderOpen sx={{ fontSize: 28, color: 'white' }} />}
+                  gradient="linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%)"
+                  iconBg="rgba(255,255,255,0.2)"
+                />
+                </Box>
+              <Box sx={{ flex: '1 1 200px', minWidth: 180 }}>
+                <StatCard
+                  title="진행 중"
+                  value={stats.active}
+                  subtitle={`초안 ${stats.draft}개`}
+                  icon={<PlayArrow sx={{ fontSize: 28, color: 'white' }} />}
+                  gradient="linear-gradient(135deg, #10B981 0%, #059669 100%)"
+                  iconBg="rgba(255,255,255,0.2)"
+                />
+              </Box>
+              <Box sx={{ flex: '1 1 200px', minWidth: 180 }}>
+                <StatCard
+                  title="총 응답"
+                  value={stats.totalResponses}
+                  icon={<People sx={{ fontSize: 28, color: 'white' }} />}
+                  gradient="linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%)"
+                  iconBg="rgba(255,255,255,0.2)"
+                />
+              </Box>
+              <Box sx={{ flex: '1 1 200px', minWidth: 180 }}>
+                <StatCard
+                  title="마감"
+                  value={stats.closed}
+                  icon={<CheckCircle sx={{ fontSize: 28, color: 'white' }} />}
+                  gradient="linear-gradient(135deg, #6B7280 0%, #4B5563 100%)"
+                  iconBg="rgba(255,255,255,0.2)"
+                />
+              </Box>
+                </Box>
 
-          {/* 메인 콘텐츠 */}
+            {/* 빠른 작업 */}
+            <Paper
+              elevation={0}
+              sx={{
+                p: 2.5,
+                borderRadius: 4,
+                border: '1px solid',
+                borderColor: 'grey.200',
+                flex: '0 0 auto',
+                minWidth: 280,
+              }}
+            >
+              <Typography variant="subtitle2" fontWeight={700} color="grey.700" sx={{ mb: 2 }}>
+                빠른 작업
+                  </Typography>
+              <Stack direction="row" spacing={1.5}>
+                  <Button
+                  variant="outlined"
+                    size="small"
+                  startIcon={<Add />}
+                  onClick={handleCreate}
+                  disabled={creating}
+                    sx={{
+                    borderRadius: 2,
+                    textTransform: 'none',
+                    fontWeight: 600,
+                    borderColor: 'grey.300',
+                    color: 'grey.700',
+                      '&:hover': {
+                      borderColor: 'primary.main',
+                      backgroundColor: 'primary.50',
+                    },
+                  }}
+                >
+                  새 설문
+                  </Button>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={<PictureAsPdf />}
+                  onClick={() => setPdfDialogOpen(true)}
+                  sx={{
+                    borderRadius: 2,
+                    textTransform: 'none',
+                    fontWeight: 600,
+                    borderColor: 'grey.300',
+                    color: 'grey.700',
+                    '&:hover': {
+                      borderColor: 'primary.main',
+                      backgroundColor: 'primary.50',
+                    },
+                  }}
+                >
+                  PDF 가져오기
+                </Button>
+              </Stack>
+            </Paper>
+        </Box>
+
+          {/* 설문 목록 (전체 너비) */}
           <Grid container spacing={4}>
-            {/* 설문 목록 */}
-            <Grid item xs={12} lg={8}>
+            <Grid item xs={12}>
               <Paper
                 elevation={0}
-                sx={{
+          sx={{ 
                   borderRadius: 4,
                   border: '1px solid',
                   borderColor: 'grey.200',
@@ -716,7 +784,7 @@ export default function Dashboard() {
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
                     <Typography variant="h6" fontWeight={700} color="grey.800">
                       설문 목록
-                    </Typography>
+          </Typography>
                     <Stack direction="row" spacing={1.5} alignItems="center">
                       <TextField
                         size="small"
@@ -730,7 +798,7 @@ export default function Dashboard() {
                             </InputAdornment>
                           ),
                         }}
-                        sx={{
+              sx={{
                           width: 220,
                           '& .MuiOutlinedInput-root': {
                             borderRadius: 2.5,
@@ -745,13 +813,13 @@ export default function Dashboard() {
                         <IconButton
                           onClick={handleRefresh}
                           disabled={refreshing}
-                          sx={{
+          sx={{ 
                             backgroundColor: 'grey.100',
                             '&:hover': { backgroundColor: 'grey.200' },
-                          }}
-                        >
+          }}
+        >
                           <Refresh
-                            sx={{
+              sx={{
                               fontSize: 20,
                               animation: refreshing ? 'spin 1s linear infinite' : 'none',
                             }}
@@ -759,12 +827,12 @@ export default function Dashboard() {
                         </IconButton>
                       </Tooltip>
                     </Stack>
-                  </Box>
+                </Box>
 
                   <Tabs
                     value={statusFilter}
                     onChange={(_, v) => setStatusFilter(v)}
-                    sx={{
+        sx={{ 
                       minHeight: 40,
                       '& .MuiTab-root': {
                         minHeight: 40,
@@ -784,8 +852,8 @@ export default function Dashboard() {
                     <Tab label={`초안 (${stats.draft})`} value="draft" />
                     <Tab label={`마감 (${stats.closed})`} value="closed" />
                   </Tabs>
-                </Box>
-
+          </Box>
+          
                 <Box sx={{ p: 3 }}>
                   {loading ? (
                     <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
@@ -795,25 +863,25 @@ export default function Dashboard() {
                     <Box sx={{ textAlign: 'center', py: 8 }}>
                       <Box
                         sx={{
-                          width: 80,
-                          height: 80,
-                          borderRadius: '50%',
+                    width: 80,
+                    height: 80,
+                    borderRadius: '50%',
                           backgroundColor: 'grey.100',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          mx: 'auto',
-                          mb: 3,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    mx: 'auto',
+                    mb: 3,
                         }}
                       >
                         <FolderOpen sx={{ fontSize: 40, color: 'grey.400' }} />
-                      </Box>
+          </Box>
                       <Typography variant="h6" color="grey.600" gutterBottom>
                         {searchQuery ? '검색 결과가 없습니다' : '설문이 없습니다'}
-                      </Typography>
+                  </Typography>
                       <Typography variant="body2" color="grey.500" sx={{ mb: 3 }}>
                         {searchQuery ? '다른 검색어를 시도해보세요' : '첫 번째 설문을 만들어보세요!'}
-                      </Typography>
+                    </Typography>
                       {!searchQuery && (
                         <Button
                           variant="contained"
@@ -824,16 +892,16 @@ export default function Dashboard() {
                           새 설문 만들기
                         </Button>
                       )}
-                    </Box>
+                  </Box>
                   ) : (
                     <Grid container spacing={3}>
                       {filteredSurveys.map((survey) => (
-                        <Grid item xs={12} sm={6} key={survey.id}>
+                        <Grid item xs={12} sm={6} md={4} lg={3} key={survey.id}>
                           <SurveyCard
                             survey={survey}
-                            onEdit={() => router.push(`/admin/surveys/${survey.id}/edit`)}
-                            onPreview={() => router.push(`/admin/surveys/${survey.id}/preview`)}
-                            onResponses={() => router.push(`/admin/surveys/${survey.id}/responses`)}
+                            onEdit={() => router.push(`/m7k9p2/surveys/${survey.id}/edit`)}
+                            onPreview={() => router.push(`/m7k9p2/surveys/${survey.id}/preview`)}
+                            onResponses={() => router.push(`/m7k9p2/surveys/${survey.id}/responses`)}
                             onPublish={() => handlePublish(survey)}
                             onClose={() => handleClose(survey)}
                             onDelete={() => handleDelete(survey)}
@@ -842,154 +910,6 @@ export default function Dashboard() {
                         </Grid>
                       ))}
                     </Grid>
-                  )}
-                </Box>
-              </Paper>
-            </Grid>
-
-            {/* 사이드바 */}
-            <Grid item xs={12} lg={4}>
-              {/* 빠른 작업 */}
-              <Paper
-                elevation={0}
-                sx={{
-                  p: 3,
-                  borderRadius: 4,
-                  border: '1px solid',
-                  borderColor: 'grey.200',
-                  mb: 3,
-                }}
-              >
-                <Typography variant="h6" fontWeight={700} color="grey.800" sx={{ mb: 2.5 }}>
-                  빠른 작업
-                </Typography>
-                <Stack spacing={2}>
-                  <Button
-                    variant="outlined"
-                    fullWidth
-                    startIcon={<Add />}
-                    endIcon={<KeyboardArrowRight />}
-                    onClick={handleCreate}
-                    disabled={creating}
-                    sx={{
-                      justifyContent: 'space-between',
-                      py: 1.5,
-                      px: 2.5,
-                      borderRadius: 3,
-                      textTransform: 'none',
-                      fontWeight: 600,
-                      borderWidth: 1.5,
-                      borderColor: 'grey.200',
-                      color: 'grey.700',
-                      '&:hover': {
-                        borderWidth: 1.5,
-                        borderColor: 'primary.main',
-                        backgroundColor: 'primary.50',
-                      },
-                    }}
-                  >
-                    새 설문 만들기
-                  </Button>
-                  <Button
-                    variant="outlined"
-                    fullWidth
-                    startIcon={<PictureAsPdf />}
-                    endIcon={<KeyboardArrowRight />}
-                    onClick={() => setPdfDialogOpen(true)}
-                    sx={{
-                      justifyContent: 'space-between',
-                      py: 1.5,
-                      px: 2.5,
-                      borderRadius: 3,
-                      textTransform: 'none',
-                      fontWeight: 600,
-                      borderWidth: 1.5,
-                      borderColor: 'grey.200',
-                      color: 'grey.700',
-                      '&:hover': {
-                        borderWidth: 1.5,
-                        borderColor: 'primary.main',
-                        backgroundColor: 'primary.50',
-                      },
-                    }}
-                  >
-                    PDF에서 가져오기
-                  </Button>
-                </Stack>
-              </Paper>
-
-              {/* 최근 설문 */}
-              <Paper
-                elevation={0}
-                sx={{
-                  borderRadius: 4,
-                  border: '1px solid',
-                  borderColor: 'grey.200',
-                  overflow: 'hidden',
-                }}
-              >
-                <Box sx={{ p: 3, borderBottom: '1px solid', borderColor: 'grey.100' }}>
-                  <Typography variant="h6" fontWeight={700} color="grey.800">
-                    최근 업데이트
-                  </Typography>
-                </Box>
-                <Box sx={{ p: 2 }}>
-                  {loading ? (
-                    <Stack spacing={1}>
-                      {[1, 2, 3].map((i) => (
-                        <Skeleton key={i} variant="rounded" height={60} sx={{ borderRadius: 2 }} />
-                      ))}
-                    </Stack>
-                  ) : recentSurveys.length === 0 ? (
-                    <Typography variant="body2" color="grey.500" sx={{ py: 4, textAlign: 'center' }}>
-                      최근 활동이 없습니다
-                    </Typography>
-                  ) : (
-                    <List disablePadding>
-                      {recentSurveys.map((survey, index) => {
-                        const statusColor = survey.status === 'published' ? '#10B981' : survey.status === 'closed' ? '#6B7280' : '#F59E0B';
-                        return (
-                          <ListItem
-                            key={survey.id}
-                            sx={{
-                              px: 2,
-                              py: 1.5,
-                              cursor: 'pointer',
-                              borderRadius: 2,
-                              mb: index < recentSurveys.length - 1 ? 0.5 : 0,
-                              '&:hover': { backgroundColor: 'grey.50' },
-                            }}
-                            onClick={() => router.push(`/admin/surveys/${survey.id}/edit`)}
-                          >
-                            <Box
-                              sx={{
-                                width: 8,
-                                height: 8,
-                                borderRadius: '50%',
-                                backgroundColor: statusColor,
-                                mr: 2,
-                                flexShrink: 0,
-                              }}
-                            />
-                            <ListItemText
-                              primary={survey.title || '제목 없음'}
-                              secondary={`${survey.response_count || 0}개 응답`}
-                              primaryTypographyProps={{
-                                fontWeight: 600,
-                                fontSize: '0.875rem',
-                                color: 'grey.800',
-                                noWrap: true,
-                              }}
-                              secondaryTypographyProps={{
-                                fontSize: '0.75rem',
-                                color: 'grey.500',
-                              }}
-                            />
-                            <ArrowForward sx={{ fontSize: 16, color: 'grey.400' }} />
-                          </ListItem>
-                        );
-                      })}
-                    </List>
                   )}
                 </Box>
               </Paper>
@@ -1020,22 +940,22 @@ export default function Dashboard() {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    mx: 'auto',
-                    mb: 3,
+              mx: 'auto',
+                mb: 3,
                     boxShadow: '0 8px 24px rgba(16, 185, 129, 0.3)',
                   }}
                 >
                   <CheckCircle sx={{ fontSize: 40, color: 'white' }} />
-                </Box>
+               </Box>
                 <Typography variant="h6" fontWeight={700} gutterBottom>
                   설문이 생성되었습니다!
-                </Typography>
+              </Typography>
                 <Typography color="grey.600" sx={{ mb: 1 }}>
                   {pdfResult.survey_title}
-                </Typography>
+                  </Typography>
                 <Typography variant="body2" color="grey.500">
                   섹션 {pdfResult.sections_count}개, 문항 {pdfResult.questions_count}개
-                </Typography>
+              </Typography>
                 <Typography variant="caption" color="grey.400" sx={{ display: 'block', mt: 3 }}>
                   편집 페이지로 이동합니다...
                 </Typography>
@@ -1047,7 +967,7 @@ export default function Dashboard() {
                 onDragOver={handlePdfDragOver}
                 onDrop={handlePdfDrop}
                 onClick={() => pdfInputRef.current?.click()}
-                sx={{
+                sx={{ 
                   p: 5,
                   border: '2px dashed',
                   borderColor: isDragging ? 'primary.main' : 'grey.300',
@@ -1073,7 +993,7 @@ export default function Dashboard() {
                   }}
                 />
                 <Box
-                  sx={{
+                 sx={{ 
                     width: 64,
                     height: 64,
                     borderRadius: 3,
@@ -1091,7 +1011,7 @@ export default function Dashboard() {
                   <>
                     <Typography variant="body1" fontWeight={600} color="grey.800">
                       {pdfFile.name}
-                    </Typography>
+             </Typography>
                     <Typography variant="caption" color="grey.500">
                       {(pdfFile.size / 1024 / 1024).toFixed(2)} MB
                     </Typography>
@@ -1109,33 +1029,33 @@ export default function Dashboard() {
               </Box>
             )}
             {pdfUploading && <LinearProgress sx={{ mt: 2, borderRadius: 1 }} />}
-          </DialogContent>
+         </DialogContent>
           <DialogActions sx={{ px: 3, pb: 3 }}>
             <Button
               onClick={handlePdfDialogClose}
               sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 600 }}
             >
-              취소
-            </Button>
+             취소
+           </Button>
             {!pdfResult && (
-              <Button
-                variant="contained"
+           <Button
+             variant="contained"
                 onClick={handlePdfUpload}
                 disabled={!pdfFile || pdfUploading}
                 sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 600 }}
-              >
+           >
                 {pdfUploading ? '분석 중...' : '가져오기'}
-              </Button>
+           </Button>
             )}
-          </DialogActions>
-        </Dialog>
+         </DialogActions>
+       </Dialog>
 
         {/* 푸터 */}
         <Box sx={{ textAlign: 'center', py: 4, mt: 6 }}>
           <Typography variant="body2" color="grey.500">
             © 2025 SurveyMachine. All rights reserved.
           </Typography>
-        </Box>
+    </Box>
 
         <style jsx global>{`
           @keyframes spin {

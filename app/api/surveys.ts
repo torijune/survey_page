@@ -36,6 +36,11 @@ export interface LikertConfig {
   rows: string[] | LikertRowItem[];
 }
 
+export interface RankingConfig {
+  max_ranks: number;
+  rank_labels: string[];
+}
+
 export interface QuestionOption {
   id?: string;
   question_id?: string;
@@ -55,9 +60,11 @@ export interface Question {
   required: boolean;
   order_index: number;
   is_hidden?: boolean;
+  question_number?: string; // 질문 넘버링 (SQ1, SQ2, A1, A2, B1, B2 등)
   validation_rules?: ValidationRules;
   conditional_logic?: ConditionalLogic;
   likert_config?: LikertConfig;
+  ranking_config?: RankingConfig;
   options: QuestionOption[];
   created_at?: string;
   updated_at?: string;
@@ -284,9 +291,12 @@ export async function createQuestion(data: {
   description?: string;
   required?: boolean;
   order_index?: number;
+  is_hidden?: boolean;
+  question_number?: string;
   validation_rules?: ValidationRules;
   conditional_logic?: ConditionalLogic;
   likert_config?: LikertConfig;
+  ranking_config?: RankingConfig;
   options?: QuestionOption[];
 }): Promise<Question> {
   const response = await fetch(`${API_BASE}/api/v1/surveys/questions`, {
@@ -305,9 +315,12 @@ export async function updateQuestion(questionId: string, data: {
   description?: string;
   required?: boolean;
   order_index?: number;
+  is_hidden?: boolean;
+  question_number?: string;
   validation_rules?: ValidationRules;
-  conditional_logic?: ConditionalLogic;
+  conditional_logic?: ConditionalLogic | null;
   likert_config?: LikertConfig;
+  ranking_config?: RankingConfig | null;
   options?: QuestionOption[];
 }): Promise<Question> {
   const response = await fetch(`${API_BASE}/api/v1/surveys/questions/${questionId}`, {
@@ -399,6 +412,17 @@ export async function downloadResponses(surveyId: string, format: 'csv' | 'xlsx'
   if (!response.ok) throw new Error('응답 다운로드 실패');
   
   return response.blob();
+}
+
+export async function deleteResponse(responseId: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/api/v1/surveys/responses/${responseId}`, {
+    method: 'DELETE',
+  });
+  
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || '응답 삭제 실패');
+  }
 }
 
 

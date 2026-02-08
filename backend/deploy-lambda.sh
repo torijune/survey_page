@@ -31,8 +31,8 @@ aws ecr create-repository --repository-name $ECR_REPO --region $AWS_REGION 2>/de
 
 # 3. Docker 이미지 빌드 (x86_64 아키텍처 강제 지정)
 echo "🐳 Docker 이미지 빌드 중..."
-docker buildx create --use --name cvpilot-builder || docker buildx use cvpilot-builder
-docker buildx build --platform linux/amd64 -f Dockerfile.lambda -t $ECR_REPO --load .
+docker buildx use multiarch-builder 2>/dev/null || docker buildx use default
+docker buildx build --no-cache --platform linux/amd64 -f Dockerfile.lambda -t $ECR_REPO --load .
 if [ $? -ne 0 ]; then
     echo "❌ Docker 빌드 실패"
     exit 1
@@ -62,7 +62,7 @@ else
     echo "🆕 Lambda 함수 생성 중..."
     
     # IAM 역할 생성 (존재하지 않으면)
-    ROLE_NAME="cvpilot-lambda-role"
+    ROLE_NAME="survey-lambda-role"
     ROLE_ARN="arn:aws:iam::$AWS_ACCOUNT_ID:role/$ROLE_NAME"
     
     if ! aws iam get-role --role-name $ROLE_NAME > /dev/null 2>&1; then

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   Box,
   Button,
@@ -78,26 +78,31 @@ export default function SurveyForm({ survey, onComplete }: SurveyFormProps) {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [userInfo, setUserInfo] = useState('');
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const pendingSaveRef = useRef<boolean>(false);
   
-  // 모든 질문을 평탄화하여 하나의 배열로 만들기 (숨겨진 문항 제외)
+  // 모든 질문을 평탄화하여 하나의 배열로 만들기 (변수 치환을 위해 모든 질문 포함)
   const allQuestions = useMemo(() => {
     const questions: Question[] = [];
     
     survey.sections.forEach(section => {
       section.questions.forEach(question => {
-        // 숨겨진 문항은 제외
-        if (!question.is_hidden) {
-          questions.push(question);
-        }
+        // 변수 치환을 위해 모든 질문 포함 (숨겨진 문항도 포함)
+        questions.push(question);
       });
     });
     
     return questions;
   }, [survey]);
   
+  // 표시할 질문만 필터링 (숨겨진 문항 제외)
+  const visibleQuestionsList = useMemo(() => {
+    return allQuestions.filter(q => !q.is_hidden);
+  }, [allQuestions]);
+  
   // 조건부 로직 처리 - 표시할 질문 필터링
   const visibleQuestions = useMemo(() => {
-    return allQuestions.filter(q => {
+    return visibleQuestionsList.filter(q => {
       if (!q.conditional_logic) return true;
       
       const { question_id, operator, value, action } = q.conditional_logic;
@@ -108,15 +113,59 @@ export default function SurveyForm({ survey, onComplete }: SurveyFormProps) {
       let conditionMet = false;
       const answerValue = answer.answer_value;
       
+      // value가 배열인지 확인 (다중 조건 값)
+      const conditionValues = Array.isArray(value) ? value : [value];
+      
       switch (operator) {
         case 'equals':
-          conditionMet = answerValue === value;
+          // 단일 값 응답: 조건 값 배열에 포함되는지 확인
+          // 다중 값 응답: 조건 값 배열과 겹치는지 확인
+          if (Array.isArray(answerValue)) {
+            conditionMet = answerValue.some(val => conditionValues.includes(val));
+          } else {
+            conditionMet = conditionValues.includes(answerValue);
+          }
           break;
         case 'not_equals':
-          conditionMet = answerValue !== value;
+          // 단일 값 응답: 조건 값 배열에 포함되지 않는지 확인
+          // 다중 값 응답: 조건 값 배열과 겹치지 않는지 확인
+          if (Array.isArray(answerValue)) {
+            conditionMet = !answerValue.some(val => conditionValues.includes(val));
+          } else {
+            conditionMet = !conditionValues.includes(answerValue);
+          }
           break;
         case 'contains':
-          conditionMet = Array.isArray(answerValue) && answerValue.includes(value);
+          // 다중 선택 응답에서 조건 값 중 하나라도 포함되는지 확인
+          if (Array.isArray(answerValue)) {
+            conditionMet = conditionValues.some(val => answerValue.includes(val));
+          } else {
+            conditionMet = conditionValues.includes(answerValue);
+          }
+          break;
+        case 'not_contains':
+          // 다중 선택 응답에서 조건 값이 모두 포함되지 않는지 확인
+          if (Array.isArray(answerValue)) {
+            conditionMet = !conditionValues.some(val => answerValue.includes(val));
+          } else {
+            conditionMet = !conditionValues.includes(answerValue);
+          }
+          break;
+        case 'greater_than':
+          // 숫자 비교: 조건 값 중 하나라도보다 큰지 확인
+          const numValue = typeof answerValue === 'number' ? answerValue : parseFloat(String(answerValue));
+          conditionMet = conditionValues.some(val => {
+            const numCondition = typeof val === 'number' ? val : parseFloat(String(val));
+            return !isNaN(numValue) && !isNaN(numCondition) && numValue > numCondition;
+          });
+          break;
+        case 'less_than':
+          // 숫자 비교: 조건 값 중 하나라도보다 작은지 확인
+          const numValue2 = typeof answerValue === 'number' ? answerValue : parseFloat(String(answerValue));
+          conditionMet = conditionValues.some(val => {
+            const numCondition = typeof val === 'number' ? val : parseFloat(String(val));
+            return !isNaN(numValue2) && !isNaN(numCondition) && numValue2 < numCondition;
+          });
           break;
         default:
           conditionMet = false;
@@ -142,8 +191,13 @@ export default function SurveyForm({ survey, onComplete }: SurveyFormProps) {
     return String.fromCharCode(65 + sectionIndex); // A=65, B=66, C=67...
   };
   
-  // 문항 번호 생성 (A1, A2, B1...)
+  // 문항 번호 생성 (저장된 question_number 우선, 없으면 A1, A2, B1... 형식으로 생성)
   const getQuestionNumber = (question: Question): string => {
+    // 저장된 question_number가 있으면 우선 사용
+    if (question.question_number) {
+      return question.question_number;
+    }
+    
     if (!question.section_id) return '';
     
     // 섹션 인덱스 찾기
@@ -198,13 +252,55 @@ export default function SurveyForm({ survey, onComplete }: SurveyFormProps) {
     };
     initResponse();
   }, [survey.id, responseId]);
+
+  // cleanup: 컴포넌트 unmount 시 debounce 타이머 정리
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, []);
   
-  // 답변 변경 핸들러
-  const handleAnswerChange = (questionId: string, data: { answer_value?: any; answer_text?: string }) => {
-    setAnswers(prev => ({
-      ...prev,
-      [questionId]: data,
-    }));
+  // 백그라운드 저장 함수 (비동기, await 없음)
+  const saveAnswersInBackground = useCallback(async (answersToSave: Answers) => {
+    if (!responseId || !survey.allow_edit) return;
+    
+    try {
+      const items: ResponseItem[] = Object.entries(answersToSave).map(([questionId, data]) => ({
+        question_id: questionId,
+        answer_value: data.answer_value,
+        answer_text: data.answer_text,
+      }));
+      await updateResponseItems(responseId, items);
+      pendingSaveRef.current = false;
+    } catch (e) {
+      console.error('자동 저장 실패:', e);
+      pendingSaveRef.current = false;
+    }
+  }, [responseId, survey.allow_edit]);
+
+  // 답변 변경 핸들러 (debounce 적용)
+  const handleAnswerChange = useCallback((questionId: string, data: { answer_value?: any; answer_text?: string }) => {
+    setAnswers(prev => {
+      const newAnswers = {
+        ...prev,
+        [questionId]: data,
+      };
+      
+      // debounce: 2초 후 자동 저장
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+      saveTimeoutRef.current = setTimeout(() => {
+        if (!pendingSaveRef.current) {
+          pendingSaveRef.current = true;
+          saveAnswersInBackground(newAnswers);
+        }
+      }, 2000);
+      
+      return newAnswers;
+    });
     
     // 에러 클리어
     if (errors[questionId]) {
@@ -214,7 +310,7 @@ export default function SurveyForm({ survey, onComplete }: SurveyFormProps) {
         return newErrors;
       });
     }
-  };
+  }, [errors, saveAnswersInBackground]);
   
   // 현재 질문 검증
   const validateCurrentQuestion = (): boolean => {
@@ -266,24 +362,25 @@ export default function SurveyForm({ survey, onComplete }: SurveyFormProps) {
     return Object.keys(newErrors).length === 0;
   };
   
-  // 다음 질문으로 이동
-  const handleNext = async () => {
+  // 다음 질문으로 이동 (즉시 이동, 저장은 백그라운드)
+  const handleNext = () => {
     if (!validateCurrentQuestion()) return;
     
-    // 중간 저장
-    if (responseId && survey.allow_edit) {
-      try {
-        const items: ResponseItem[] = Object.entries(answers).map(([questionId, data]) => ({
-          question_id: questionId,
-          answer_value: data.answer_value,
-          answer_text: data.answer_text,
-        }));
-        await updateResponseItems(responseId, items);
-      } catch (e) {
-        console.error('중간 저장 실패:', e);
-      }
+    // debounce 타이머 취소
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = null;
     }
     
+    // 즉시 저장 (백그라운드, await 없음)
+    if (responseId && survey.allow_edit) {
+      pendingSaveRef.current = true;
+      saveAnswersInBackground(answers).catch(e => {
+        console.error('저장 실패:', e);
+      });
+    }
+    
+    // 즉시 다음 질문으로 이동 (저장 완료를 기다리지 않음)
     if (currentQuestionIndex < visibleQuestions.length - 1) {
       setCurrentQuestionIndex(prev => prev + 1);
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -298,10 +395,22 @@ export default function SurveyForm({ survey, onComplete }: SurveyFormProps) {
     }
   };
   
-  // 제출
+  // 제출 (제출 시에는 저장 완료를 기다림)
   const handleSubmit = async () => {
     if (!validateCurrentQuestion()) return;
     if (!responseId) return;
+    
+    // debounce 타이머 취소
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = null;
+    }
+    
+    // 마지막 저장 완료 대기 (필요한 경우)
+    if (pendingSaveRef.current && responseId && survey.allow_edit) {
+      // 잠시 대기하여 저장 완료 확인
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
     
     setSubmitting(true);
     setSubmitError(null);
@@ -646,6 +755,8 @@ export default function SurveyForm({ survey, onComplete }: SurveyFormProps) {
               answer={answers[currentQuestion.id!]}
               onChange={(data) => handleAnswerChange(currentQuestion.id!, data)}
               error={errors[currentQuestion.id!]}
+              allQuestions={allQuestions}
+              allAnswers={answers}
             />
           </>
         )}

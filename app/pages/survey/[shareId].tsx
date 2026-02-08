@@ -63,15 +63,7 @@ export default function SurveyPage() {
           }}
         >
           <Container maxWidth="sm">
-            <Alert
-              severity="error"
-              sx={{ borderRadius: 2 }}
-              action={
-                <Button color="inherit" size="small" onClick={() => router.push('/')}>
-                  홈으로
-                </Button>
-              }
-            >
+            <Alert severity="error" sx={{ borderRadius: 2 }}>
               {error}
             </Alert>
           </Container>

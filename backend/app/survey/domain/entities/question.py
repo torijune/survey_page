@@ -14,6 +14,7 @@ class QuestionType(str, Enum):
     NUMBER = "number"
     DATE = "date"
     DROPDOWN = "dropdown"
+    RANKING = "ranking"  # 순위 선택 (1순위, 2순위 등)
 
 
 @dataclass
@@ -79,30 +80,86 @@ class ConditionalLogic:
 
 
 @dataclass
+class LikertRowItem:
+    """리커트 척도 행 항목"""
+    text: str
+    image_url: Optional[str] = None
+    style: Optional[Dict[str, Any]] = None  # e.g., {"bold": True, "color": "#FF0000"}
+    
+    def to_dict(self) -> dict:
+        return {
+            "text": self.text,
+            "image_url": self.image_url,
+            "style": self.style,
+        }
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "LikertRowItem":
+        return cls(
+            text=data.get("text", ""),
+            image_url=data.get("image_url"),
+            style=data.get("style"),
+        )
+
+
+@dataclass
 class LikertConfig:
     """리커트 척도 설정"""
     scale_min: int = 1
     scale_max: int = 5
     labels: List[str] = field(default_factory=lambda: ["매우 불만족", "불만족", "보통", "만족", "매우 만족"])
-    rows: List[Any] = field(default_factory=list)  # 리커트 표 행 항목 (문자열 또는 {text, image_url, style} 객체)
+    rows: List[Any] = field(default_factory=list)  # 리커트 표 행 항목 (문자열 또는 LikertRowItem 객체)
     
     def to_dict(self) -> dict:
         return {
             "scale_min": self.scale_min,
             "scale_max": self.scale_max,
             "labels": self.labels,
-            "rows": self.rows,
+            "rows": [
+                row.to_dict() if isinstance(row, LikertRowItem) else row
+                for row in self.rows
+            ],
         }
     
     @classmethod
     def from_dict(cls, data: Optional[Dict[str, Any]]) -> Optional["LikertConfig"]:
         if not data:
             return None
+        rows = []
+        for row_item in data.get("rows", []):
+            if isinstance(row_item, dict):
+                rows.append(LikertRowItem.from_dict(row_item))
+            elif isinstance(row_item, str):
+                rows.append(LikertRowItem(text=row_item))
+            else:
+                rows.append(row_item)
         return cls(
             scale_min=data.get("scale_min", 1),
             scale_max=data.get("scale_max", 5),
             labels=data.get("labels", ["매우 불만족", "불만족", "보통", "만족", "매우 만족"]),
-            rows=data.get("rows", []),
+            rows=rows,
+        )
+
+
+@dataclass
+class RankingConfig:
+    """순위 선택 설정"""
+    max_ranks: int = 2  # 최대 몇 개까지 선택할 수 있는지 (예: 1순위, 2순위)
+    rank_labels: List[str] = field(default_factory=lambda: ["1순위", "2순위"])  # 순위 레이블 (예: ["1순위", "2순위"])
+    
+    def to_dict(self) -> dict:
+        return {
+            "max_ranks": self.max_ranks,
+            "rank_labels": self.rank_labels,
+        }
+    
+    @classmethod
+    def from_dict(cls, data: Optional[Dict[str, Any]]) -> Optional["RankingConfig"]:
+        if not data:
+            return None
+        return cls(
+            max_ranks=data.get("max_ranks", 2),
+            rank_labels=data.get("rank_labels", [f"{i+1}순위" for i in range(data.get("max_ranks", 2))]),
         )
 
 
@@ -117,9 +174,11 @@ class Question:
     required: bool = False
     order_index: int = 0
     is_hidden: bool = False  # 숨기기 기능 (미리보기/실제 설문에서 숨김)
+    question_number: Optional[str] = None  # 질문 넘버링 (SQ1, SQ2, A1, A2, B1, B2 등)
     validation_rules: Optional[ValidationRules] = None
     conditional_logic: Optional[ConditionalLogic] = None
     likert_config: Optional[LikertConfig] = None
+    ranking_config: Optional[RankingConfig] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     
@@ -136,9 +195,11 @@ class Question:
             "required": self.required,
             "order_index": self.order_index,
             "is_hidden": self.is_hidden,
+            "question_number": self.question_number,
             "validation_rules": self.validation_rules.to_dict() if self.validation_rules else None,
             "conditional_logic": self.conditional_logic.to_dict() if self.conditional_logic else None,
             "likert_config": self.likert_config.to_dict() if self.likert_config else None,
+            "ranking_config": self.ranking_config.to_dict() if self.ranking_config else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }

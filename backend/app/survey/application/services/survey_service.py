@@ -4,7 +4,7 @@ from uuid import UUID
 
 from ...domain.entities import (
     Survey, SurveyStatus, Section, Question, QuestionType,
-    QuestionOption, ValidationRules, ConditionalLogic, LikertConfig
+    QuestionOption, ValidationRules, ConditionalLogic, LikertConfig, RankingConfig
 )
 from ...domain.repositories import SurveyRepository
 from ...api.models import (
@@ -147,9 +147,11 @@ class SurveyService:
             required=request.required,
             order_index=request.order_index,
             is_hidden=request.is_hidden,
+            question_number=request.question_number,
             validation_rules=self._map_validation_rules(request.validation_rules),
             conditional_logic=self._map_conditional_logic(request.conditional_logic),
             likert_config=self._map_likert_config(request.likert_config),
+            ranking_config=self._map_ranking_config(request.ranking_config),
         )
         
         created_question = await self.survey_repository.create_question(question)
@@ -186,12 +188,16 @@ class SurveyService:
             existing.order_index = request.order_index
         if request.is_hidden is not None:
             existing.is_hidden = request.is_hidden
+        if request.question_number is not None:
+            existing.question_number = request.question_number
         if request.validation_rules is not None:
             existing.validation_rules = self._map_validation_rules(request.validation_rules)
         if request.conditional_logic is not None:
             existing.conditional_logic = self._map_conditional_logic(request.conditional_logic)
         if request.likert_config is not None:
             existing.likert_config = self._map_likert_config(request.likert_config)
+        if request.ranking_config is not None:
+            existing.ranking_config = self._map_ranking_config(request.ranking_config)
         
         updated_question = await self.survey_repository.update_question(existing)
         
@@ -251,5 +257,13 @@ class SurveyService:
             scale_max=request.scale_max,
             labels=request.labels,
             rows=request.rows,
+        )
+    
+    def _map_ranking_config(self, request) -> Optional[RankingConfig]:
+        if not request:
+            return None
+        return RankingConfig(
+            max_ranks=request.max_ranks,
+            rank_labels=request.rank_labels,
         )
 

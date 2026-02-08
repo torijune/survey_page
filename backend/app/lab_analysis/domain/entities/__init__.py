@@ -1,1 +1,0 @@
-# Lab Analysis Domain Entities Package 
