@@ -3,6 +3,7 @@ import { Box, Typography, Chip } from '@mui/material';
 import { Question } from '../../api/surveys';
 import {
   SingleChoiceQuestion,
+  SingleScaleQuestion,
   MultipleChoiceQuestion,
   TextQuestion,
   NumberQuestion,
@@ -17,6 +18,19 @@ interface AnswerData {
   answer_text?: string;
 }
 
+interface FontSizeConfig {
+  base: string;
+  h1: string;
+  h2: string;
+  h3: string;
+  h4: string;
+  h5: string;
+  h6: string;
+  body1: string;
+  body2: string;
+  caption: string;
+}
+
 interface QuestionRendererProps {
   question: Question;
   questionNumber: string | number;
@@ -25,6 +39,7 @@ interface QuestionRendererProps {
   error?: string;
   allQuestions?: Question[]; // 모든 질문 목록 (변수 치환용)
   allAnswers?: Record<string, AnswerData>; // 모든 응답 (변수 치환용)
+  fontSize?: FontSizeConfig; // 글씨 크기 설정
 }
 
 export default function QuestionRenderer({
@@ -35,6 +50,7 @@ export default function QuestionRenderer({
   error,
   allQuestions = [],
   allAnswers = {},
+  fontSize,
 }: QuestionRendererProps) {
   
   // 변수 치환 함수: {{question_number}} 또는 {{question_id}}를 실제 응답 값으로 치환
@@ -124,6 +140,22 @@ export default function QuestionRenderer({
     return resolved;
   }, [question, replaceVariables]);
   
+  // 기본 글씨 크기 설정
+  const defaultFontSize: FontSizeConfig = {
+    base: '1rem',
+    h1: '2rem',
+    h2: '1.5rem',
+    h3: '1.25rem',
+    h4: '1.125rem',
+    h5: '1rem',
+    h6: '1rem',
+    body1: '1rem',
+    body2: '0.875rem',
+    caption: '0.75rem',
+  };
+  
+  const currentFontSize = fontSize || defaultFontSize;
+  
   const renderQuestion = () => {
     switch (question.type) {
       case 'single_choice':
@@ -134,6 +166,19 @@ export default function QuestionRenderer({
             otherText={answer?.answer_text}
             onChange={(value, otherText) => onChange({ answer_value: value, answer_text: otherText })}
             error={error}
+            fontSize={currentFontSize}
+          />
+        );
+      
+      case 'single_scale':
+        return (
+          <SingleScaleQuestion
+            question={resolvedQuestion}
+            value={answer?.answer_value}
+            otherText={answer?.answer_text}
+            onChange={(value, otherText) => onChange({ answer_value: value, answer_text: otherText })}
+            error={error}
+            fontSize={currentFontSize}
           />
         );
       
@@ -145,6 +190,7 @@ export default function QuestionRenderer({
             otherText={answer?.answer_text}
             onChange={(value, otherText) => onChange({ answer_value: value, answer_text: otherText })}
             error={error}
+            fontSize={currentFontSize}
           />
         );
       
@@ -156,6 +202,7 @@ export default function QuestionRenderer({
             value={answer?.answer_text}
             onChange={(value) => onChange({ answer_text: value })}
             error={error}
+            fontSize={currentFontSize}
           />
         );
       
@@ -166,6 +213,7 @@ export default function QuestionRenderer({
             value={answer?.answer_value}
             onChange={(value) => onChange({ answer_value: value })}
             error={error}
+            fontSize={currentFontSize}
           />
         );
       
@@ -176,6 +224,7 @@ export default function QuestionRenderer({
             value={answer?.answer_value}
             onChange={(value) => onChange({ answer_value: value })}
             error={error}
+            fontSize={currentFontSize}
           />
         );
       
@@ -186,6 +235,7 @@ export default function QuestionRenderer({
             value={answer?.answer_value}
             onChange={(value) => onChange({ answer_value: value })}
             error={error}
+            fontSize={currentFontSize}
           />
         );
       
@@ -221,6 +271,7 @@ export default function QuestionRenderer({
             value={answer?.answer_value}
             onChange={(value) => onChange({ answer_value: value })}
             error={error}
+            fontSize={currentFontSize}
           />
         );
       
@@ -235,11 +286,12 @@ export default function QuestionRenderer({
             value={answer?.answer_value || {}}
             onChange={(value) => onChange({ answer_value: value })}
             error={error}
+            fontSize={currentFontSize}
           />
         );
       
       default:
-        return <Typography color="error">지원하지 않는 문항 유형입니다.</Typography>;
+        return <Typography color="error" sx={{ fontSize: currentFontSize.body1 }}>지원하지 않는 문항 유형입니다.</Typography>;
     }
   };
   
@@ -251,12 +303,12 @@ export default function QuestionRenderer({
           fontWeight: 600,
           color: '#1F2937',
           mb: 3,
-          fontSize: '1.125rem',
+          fontSize: currentFontSize.h6,
         }}
       >
         {questionNumber ? `${questionNumber}. ` : ''}{resolvedTitle}
         {question.required && (
-          <Typography component="span" color="error" sx={{ ml: 0.5 }}>
+          <Typography component="span" color="error" sx={{ ml: 0.5, fontSize: currentFontSize.h6 }}>
             *
           </Typography>
         )}
@@ -266,7 +318,7 @@ export default function QuestionRenderer({
         <Typography
           variant="body1"
           color="text.secondary"
-          sx={{ mb: 3, lineHeight: 1.6 }}
+          sx={{ mb: 3, lineHeight: 1.6, fontSize: currentFontSize.body1 }}
         >
           {resolvedDescription}
         </Typography>

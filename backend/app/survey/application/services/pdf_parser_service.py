@@ -435,7 +435,8 @@ class PDFParserService:
         }}
 
         문항 유형(type)은 다음 중 하나를 사용하세요:
-        - "single_choice": 단일 선택 (라디오 버튼)
+        - "single_choice": 단일 선택 (라디오 버튼, 일반적인 선택형 문항)
+        - "single_scale": 단일 척도 (척도 형태의 단일 선택, 예: "매우 필요", "다소 필요", "보통", "별로 불필요", "전혀 불필요" 등)
         - "multiple_choice": 다중 선택 (체크박스)
         - "likert": 리커트 척도 (표 형태, 여러 항목을 같은 척도로 평가)
         - "ranking": 순위 선택 (1순위, 2순위 등으로 여러 선택지를 순서대로 선택)
@@ -444,6 +445,13 @@ class PDFParserService:
         - "number": 숫자 입력
         - "date": 날짜 선택
         - "dropdown": 드롭다운 선택
+        
+        **단일 척도(single_scale) 판단 기준:**
+        - 선택지가 척도 형태인 경우 (예: "매우 필요", "다소 필요", "보통", "별로 불필요", "전혀 불필요")
+        - 또는 (예: "매우 만족", "만족", "보통", "불만족", "매우 불만족")
+        - 또는 (예: "전혀 그렇지 않다", "그렇지 않다", "보통", "그렇다", "매우 그렇다")
+        - 이런 척도 형태의 선택지가 3개 이상이고, 단일 선택인 경우 "single_scale" 타입을 사용하세요.
+        - 일반적인 선택형 문항(예: "예", "아니오", "모르겠다" 등)은 "single_choice"를 사용하세요.
 
         **중요: 원본 텍스트를 그대로 사용하세요!**
         - 질문 제목(title), 선택지(label), 설명(description) 등 모든 텍스트는 PDF 원본에 있는 그대로 정확히 복사하세요.
@@ -660,7 +668,7 @@ class PDFParserService:
         q_type = question.get("type", "short_text")
         
         # 유효한 타입인지 확인
-        valid_types = ["single_choice", "multiple_choice", "likert", "ranking", "short_text", "long_text", "number", "date", "dropdown"]
+        valid_types = ["single_choice", "single_scale", "multiple_choice", "likert", "ranking", "short_text", "long_text", "number", "date", "dropdown"]
         if q_type not in valid_types:
             q_type = "short_text"
         
@@ -684,7 +692,7 @@ class PDFParserService:
         }
         
         # 선택형 문항 옵션 처리
-        if q_type in ["single_choice", "multiple_choice", "dropdown", "ranking"]:
+        if q_type in ["single_choice", "single_scale", "multiple_choice", "dropdown", "ranking"]:
             options = question.get("options", [])
             normalized["options"] = []
             

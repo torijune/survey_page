@@ -40,6 +40,7 @@ interface QuestionEditorProps {
 
 const QUESTION_TYPES = [
   { value: 'single_choice', label: '단일 선택' },
+  { value: 'single_scale', label: '단일 척도' },
   { value: 'multiple_choice', label: '다중 선택' },
   { value: 'dropdown', label: '드롭다운' },
   { value: 'short_text', label: '단답형' },
@@ -60,7 +61,7 @@ function QuestionEditor({
   allQuestions = [],
   currentQuestionId,
 }: QuestionEditorProps) {
-  const hasOptions = ['single_choice', 'multiple_choice', 'dropdown', 'ranking'].includes(question.type);
+  const hasOptions = ['single_choice', 'single_scale', 'multiple_choice', 'dropdown', 'ranking'].includes(question.type);
   const isLikert = question.type === 'likert';
   const isRanking = question.type === 'ranking';
   const isText = ['short_text', 'long_text'].includes(question.type);

@@ -34,11 +34,25 @@ const RichTextDisplay = ({ html, style }: { html: string; style?: React.CSSPrope
   />
 );
 
+interface FontSizeConfig {
+  base: string;
+  h1: string;
+  h2: string;
+  h3: string;
+  h4: string;
+  h5: string;
+  h6: string;
+  body1: string;
+  body2: string;
+  caption: string;
+}
+
 interface LikertQuestionProps {
   question: Question;
   value?: Record<string, number>;
   onChange: (value: Record<string, number>) => void;
   error?: string;
+  fontSize?: FontSizeConfig;
 }
 
 // Row 항목을 정규화하여 LikertRowItem 형태로 변환
@@ -54,7 +68,21 @@ export default function LikertQuestion({
   value = {},
   onChange,
   error,
+  fontSize,
 }: LikertQuestionProps) {
+  const defaultFontSize: FontSizeConfig = {
+    base: '1rem',
+    h1: '2rem',
+    h2: '1.5rem',
+    h3: '1.25rem',
+    h4: '1.125rem',
+    h5: '1rem',
+    h6: '1rem',
+    body1: '1rem',
+    body2: '0.875rem',
+    caption: '0.75rem',
+  };
+  const currentFontSize = fontSize || defaultFontSize;
   const config = question.likert_config;
   if (!config) return null;
   
@@ -109,14 +137,14 @@ export default function LikertQuestion({
                     py: 2,
                   }}
                 >
-                  <Typography variant="body2" fontWeight={600} sx={{ mb: 0.5 }}>
+                  <Typography variant="body2" fontWeight={600} sx={{ mb: 0.5, fontSize: currentFontSize.body2 }}>
                     {scale}
                   </Typography>
                   {labels[idx] && (
                     <Typography
                       variant="caption"
                       sx={{
-                        fontSize: '0.75rem',
+                        fontSize: currentFontSize.caption,
                         lineHeight: 1.4,
                         color: 'text.secondary',
                         whiteSpace: 'pre-wrap',
@@ -143,7 +171,7 @@ export default function LikertQuestion({
                     borderBottom: '1px solid #E5E7EB',
                   }}
                 >
-                  <Box sx={{ ...getRowStyle(row.style), whiteSpace: 'pre-wrap' }}>
+                  <Box sx={{ ...getRowStyle(row.style), whiteSpace: 'pre-wrap', fontSize: currentFontSize.body1 }}>
                     <RichTextDisplay html={row.text} />
                   </Box>
                   {row.image_url && (
@@ -187,7 +215,7 @@ export default function LikertQuestion({
         </Table>
       </TableContainer>
       {error && (
-        <Typography color="error" variant="caption" sx={{ mt: 1, display: 'block' }}>
+        <Typography color="error" variant="caption" sx={{ mt: 1, display: 'block', fontSize: currentFontSize.caption }}>
           {error}
         </Typography>
       )}

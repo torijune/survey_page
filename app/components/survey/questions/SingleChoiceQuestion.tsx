@@ -10,12 +10,26 @@ import {
 } from '@mui/material';
 import { Question, QuestionOption } from '../../../api/surveys';
 
+interface FontSizeConfig {
+  base: string;
+  h1: string;
+  h2: string;
+  h3: string;
+  h4: string;
+  h5: string;
+  h6: string;
+  body1: string;
+  body2: string;
+  caption: string;
+}
+
 interface SingleChoiceQuestionProps {
   question: Question;
   value?: string;
   otherText?: string;
   onChange: (value: string, otherText?: string) => void;
   error?: string;
+  fontSize?: FontSizeConfig;
 }
 
 export default function SingleChoiceQuestion({
@@ -24,7 +38,21 @@ export default function SingleChoiceQuestion({
   otherText,
   onChange,
   error,
+  fontSize,
 }: SingleChoiceQuestionProps) {
+  const defaultFontSize: FontSizeConfig = {
+    base: '1rem',
+    h1: '2rem',
+    h2: '1.5rem',
+    h3: '1.25rem',
+    h4: '1.125rem',
+    h5: '1rem',
+    h6: '1rem',
+    body1: '1rem',
+    body2: '0.875rem',
+    caption: '0.75rem',
+  };
+  const currentFontSize = fontSize || defaultFontSize;
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     onChange(e.target.value);
   };
@@ -59,8 +87,8 @@ export default function SingleChoiceQuestion({
                   <Typography
                     variant="body1"
                     sx={{
-                      color: '#374151',
-                      fontSize: '1rem',
+                      color: '#000000',
+                      fontSize: currentFontSize.body1,
                     }}
                   >
                     {option.label}

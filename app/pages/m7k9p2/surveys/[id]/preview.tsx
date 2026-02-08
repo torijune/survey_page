@@ -248,6 +248,7 @@ export default function SurveyPreviewPage() {
               alert('미리보기 모드에서는 응답이 제출되지 않습니다.');
               router.push(`/m7k9p2/surveys/${id}/edit`);
             }}
+            showNavigation={true}
           />
         )}
       </Box>

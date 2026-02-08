@@ -15,6 +15,7 @@ class QuestionType(str, Enum):
     DATE = "date"
     DROPDOWN = "dropdown"
     RANKING = "ranking"  # 순위 선택 (1순위, 2순위 등)
+    SINGLE_SCALE = "single_scale"  # 단일 척도 (매우 필요, 다소 필요, 보통, 별로 불필요, 전혀 불필요 등)
 
 
 @dataclass

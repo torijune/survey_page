@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS questions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     section_id UUID NOT NULL REFERENCES sections(id) ON DELETE CASCADE,
     type VARCHAR(50) NOT NULL CHECK (type IN (
-        'single_choice', 'multiple_choice', 'likert', 
+        'single_choice', 'single_scale', 'multiple_choice', 'likert', 'ranking',
         'short_text', 'long_text', 'number', 'date', 'dropdown'
     )),
     title TEXT NOT NULL,

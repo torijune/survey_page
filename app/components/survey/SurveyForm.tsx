@@ -9,8 +9,14 @@ import {
   Alert,
   TextField,
   Divider,
+  List,
+  ListItem,
+  ListItemButton,
+  ListItemText,
+  IconButton,
+  Tooltip,
 } from '@mui/material';
-import { ArrowBack, ArrowForward, Send } from '@mui/icons-material';
+import { ArrowBack, ArrowForward, Send, Remove, Add } from '@mui/icons-material';
 import { Survey, Question, ResponseItem, startResponse, submitResponse, updateResponseItems } from '../../api/surveys';
 import QuestionRenderer from './QuestionRenderer';
 import ReactMarkdown from 'react-markdown';
@@ -27,9 +33,10 @@ interface Answers {
 interface SurveyFormProps {
   survey: Survey;
   onComplete: () => void;
+  showNavigation?: boolean;
 }
 
-export default function SurveyForm({ survey, onComplete }: SurveyFormProps) {
+export default function SurveyForm({ survey, onComplete, showNavigation = false }: SurveyFormProps) {
   const [showIntro, setShowIntro] = useState(false); // 첫 페이지(소개) 표시 여부
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   
@@ -80,6 +87,82 @@ export default function SurveyForm({ survey, onComplete }: SurveyFormProps) {
   const [userInfo, setUserInfo] = useState('');
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const pendingSaveRef = useRef<boolean>(false);
+  
+  // 글씨 크기 조절 (로컬 스토리지에 저장)
+  // fontSizeLevel: -5 (최소) ~ +5 (최대), 기본값 0
+  const [fontSizeLevel, setFontSizeLevel] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('survey-font-size-level');
+      return saved ? parseInt(saved, 10) : 0;
+    }
+    return 0;
+  });
+  
+  // 글씨 크기 단계 범위
+  const MIN_FONT_SIZE_LEVEL = -5;
+  const MAX_FONT_SIZE_LEVEL = 5;
+  
+  // 기본 글씨 크기 (level 0 기준)
+  const baseFontSizes = {
+    base: 1.0,      // 1rem = 16px
+    h1: 2.0,        // 2rem = 32px
+    h2: 1.5,        // 1.5rem = 24px
+    h3: 1.25,       // 1.25rem = 20px
+    h4: 1.125,      // 1.125rem = 18px
+    h5: 1.0,        // 1rem = 16px
+    h6: 1.0,        // 1rem = 16px
+    body1: 1.0,     // 1rem = 16px
+    body2: 0.875,   // 0.875rem = 14px
+    caption: 0.75,  // 0.75rem = 12px
+  };
+  
+  // 단계당 증가율 (각 단계마다 10%씩 증가/감소)
+  const FONT_SIZE_STEP = 0.1; // 10%
+  
+  // 현재 단계에 맞는 글씨 크기 계산
+  const calculateFontSize = (baseSize: number): string => {
+    const multiplier = 1 + (fontSizeLevel * FONT_SIZE_STEP);
+    const calculatedSize = baseSize * multiplier;
+    // 최소 0.5rem, 최대 3rem으로 제한
+    const clampedSize = Math.max(0.5, Math.min(3.0, calculatedSize));
+    return `${clampedSize}rem`;
+  };
+  
+  // 현재 글씨 크기 설정
+  const currentFontSize = {
+    base: calculateFontSize(baseFontSizes.base),
+    h1: calculateFontSize(baseFontSizes.h1),
+    h2: calculateFontSize(baseFontSizes.h2),
+    h3: calculateFontSize(baseFontSizes.h3),
+    h4: calculateFontSize(baseFontSizes.h4),
+    h5: calculateFontSize(baseFontSizes.h5),
+    h6: calculateFontSize(baseFontSizes.h6),
+    body1: calculateFontSize(baseFontSizes.body1),
+    body2: calculateFontSize(baseFontSizes.body2),
+    caption: calculateFontSize(baseFontSizes.caption),
+  };
+  
+  // 글씨 크기 증가
+  const handleFontSizeIncrease = () => {
+    if (fontSizeLevel < MAX_FONT_SIZE_LEVEL) {
+      const newLevel = fontSizeLevel + 1;
+      setFontSizeLevel(newLevel);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('survey-font-size-level', newLevel.toString());
+      }
+    }
+  };
+  
+  // 글씨 크기 감소
+  const handleFontSizeDecrease = () => {
+    if (fontSizeLevel > MIN_FONT_SIZE_LEVEL) {
+      const newLevel = fontSizeLevel - 1;
+      setFontSizeLevel(newLevel);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('survey-font-size-level', newLevel.toString());
+      }
+    }
+  };
   
   // 모든 질문을 평탄화하여 하나의 배열로 만들기 (변수 치환을 위해 모든 질문 포함)
   const allQuestions = useMemo(() => {
@@ -226,6 +309,113 @@ export default function SurveyForm({ survey, onComplete }: SurveyFormProps) {
     if (!currentQuestion) return '';
     return getQuestionNumber(currentQuestion);
   }, [currentQuestion, survey.sections]);
+
+  // 특정 질문으로 이동 (네비게이션 바에서 사용)
+  const handleQuestionClick = (questionIndex: number) => {
+    setCurrentQuestionIndex(questionIndex);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // 네비게이션 바 렌더링
+  const renderNavigationBar = () => {
+    if (!showNavigation) return null;
+
+    return (
+      <Paper
+        elevation={2}
+        sx={{
+          position: 'fixed',
+          left: 0,
+          top: 0,
+          bottom: 0,
+          width: 280,
+          overflowY: 'auto',
+          zIndex: 1000,
+          borderRadius: 0,
+          borderRight: '1px solid #E5E7EB',
+        }}
+      >
+        <Box sx={{ p: 2, borderBottom: '1px solid #E5E7EB' }}>
+          <Typography variant="h6" fontWeight={600} sx={{ color: '#1F2937' }}>
+            질문 목록
+          </Typography>
+        </Box>
+        <List sx={{ py: 1 }}>
+          {visibleQuestions.map((question, index) => {
+            const questionNumber = getQuestionNumber(question);
+            const isActive = index === currentQuestionIndex;
+            const hasAnswer = answers[question.id!] && (
+              answers[question.id!].answer_value !== undefined || 
+              answers[question.id!].answer_text
+            );
+
+            return (
+              <ListItem key={question.id} disablePadding>
+                <ListItemButton
+                  onClick={() => handleQuestionClick(index)}
+                  selected={isActive}
+                  sx={{
+                    py: 1.5,
+                    px: 2,
+                    '&.Mui-selected': {
+                      backgroundColor: '#EFF6FF',
+                      borderLeft: '3px solid #3B82F6',
+                      '&:hover': {
+                        backgroundColor: '#DBEAFE',
+                      },
+                    },
+                    '&:hover': {
+                      backgroundColor: '#F9FAFB',
+                    },
+                  }}
+                >
+                  <ListItemText
+                    primary={
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Typography
+                          variant="body2"
+                          fontWeight={isActive ? 600 : 500}
+                          sx={{
+                            color: isActive ? '#3B82F6' : '#1F2937',
+                            minWidth: 40,
+                          }}
+                        >
+                          {questionNumber || `Q${index + 1}`}
+                        </Typography>
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            color: '#6B7280',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            flex: 1,
+                          }}
+                        >
+                          {question.title || '제목 없음'}
+                        </Typography>
+                        {hasAnswer && (
+                          <Box
+                            sx={{
+                              width: 8,
+                              height: 8,
+                              borderRadius: '50%',
+                              backgroundColor: '#10B981',
+                              flexShrink: 0,
+                            }}
+                          />
+                        )}
+                      </Box>
+                    }
+                  />
+                </ListItemButton>
+              </ListItem>
+            );
+          })}
+        </List>
+      </Paper>
+    );
+  };
   
   // 진행률 계산
   const answeredCount = useMemo(() => {
@@ -466,8 +656,10 @@ export default function SurveyForm({ survey, onComplete }: SurveyFormProps) {
   const hasIntroContent = survey.intro_content && survey.intro_content.trim();
   if (showIntro && hasIntroContent) {
     return (
-      <Box sx={{ minHeight: '100vh', backgroundColor: '#F8FAFC' }}>
-        <Container maxWidth="md" sx={{ py: 4 }}>
+      <Box sx={{ minHeight: '100vh', backgroundColor: '#F8FAFC', display: 'flex' }}>
+        {renderNavigationBar()}
+        <Box sx={{ flex: 1, marginLeft: showNavigation ? '280px' : 0 }}>
+          <Container maxWidth="md" sx={{ py: 4 }}>
           {/* 헤더 - 로고와 진행바 */}
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
             {/* 로고 영역 */}
@@ -511,12 +703,12 @@ export default function SurveyForm({ survey, onComplete }: SurveyFormProps) {
               {(survey.organization_name || survey.organization_subtitle) && (
                 <Box>
                   {survey.organization_subtitle && (
-                    <Typography variant="caption" sx={{ color: '#6B7280', display: 'block', lineHeight: 1.2 }}>
+                    <Typography variant="caption" sx={{ color: '#6B7280', display: 'block', lineHeight: 1.2, fontSize: currentFontSize.caption }}>
                       {survey.organization_subtitle}
                     </Typography>
                   )}
                   {survey.organization_name && (
-                    <Typography variant="h6" sx={{ color: '#3B82F6', fontWeight: 700, lineHeight: 1.2 }}>
+                    <Typography variant="h6" sx={{ color: '#3B82F6', fontWeight: 700, lineHeight: 1.2, fontSize: currentFontSize.h6 }}>
                       {survey.organization_name}
                     </Typography>
                   )}
@@ -524,24 +716,67 @@ export default function SurveyForm({ survey, onComplete }: SurveyFormProps) {
               )}
             </Box>
             
-            {/* 진행바 */}
-            <Box sx={{ width: 200 }}>
-              <Box
-                sx={{
-                  height: 6,
-                  borderRadius: 3,
-                  backgroundColor: '#E5E7EB',
-                  overflow: 'hidden',
-                }}
-              >
+            {/* 진행바와 글씨 크기 조절 */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              {/* 글씨 크기 조절 버튼 */}
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, border: '1px solid #E5E7EB', borderRadius: 2, p: 0.5 }}>
+                <Tooltip title="글씨 크기 줄이기">
+                  <IconButton
+                    size="small"
+                    onClick={handleFontSizeDecrease}
+                    disabled={fontSizeLevel <= MIN_FONT_SIZE_LEVEL}
+                    sx={{
+                      color: fontSizeLevel <= MIN_FONT_SIZE_LEVEL ? '#D1D5DB' : '#6B7280',
+                      '&:hover': {
+                        backgroundColor: fontSizeLevel <= MIN_FONT_SIZE_LEVEL ? 'transparent' : '#F3F4F6',
+                      },
+                      '&.Mui-disabled': {
+                        color: '#D1D5DB',
+                      },
+                    }}
+                  >
+                    <Remove fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="글씨 크기 늘리기">
+                  <IconButton
+                    size="small"
+                    onClick={handleFontSizeIncrease}
+                    disabled={fontSizeLevel >= MAX_FONT_SIZE_LEVEL}
+                    sx={{
+                      color: fontSizeLevel >= MAX_FONT_SIZE_LEVEL ? '#D1D5DB' : '#6B7280',
+                      '&:hover': {
+                        backgroundColor: fontSizeLevel >= MAX_FONT_SIZE_LEVEL ? 'transparent' : '#F3F4F6',
+                      },
+                      '&.Mui-disabled': {
+                        color: '#D1D5DB',
+                      },
+                    }}
+                  >
+                    <Add fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              </Box>
+              
+              {/* 진행바 */}
+              <Box sx={{ width: 200 }}>
                 <Box
                   sx={{
-                    height: '100%',
-                    width: '5%',
-                    backgroundColor: '#3B82F6',
+                    height: 6,
                     borderRadius: 3,
+                    backgroundColor: '#E5E7EB',
+                    overflow: 'hidden',
                   }}
-                />
+                >
+                  <Box
+                    sx={{
+                      height: '100%',
+                      width: '5%',
+                      backgroundColor: '#3B82F6',
+                      borderRadius: 3,
+                    }}
+                  />
+                </Box>
               </Box>
             </Box>
           </Box>
@@ -554,6 +789,7 @@ export default function SurveyForm({ survey, onComplete }: SurveyFormProps) {
               textAlign: 'center',
               mb: 4,
               color: '#1F2937',
+              fontSize: currentFontSize.h4,
             }}
           >
             {survey.title || '설문'}
@@ -577,7 +813,7 @@ export default function SurveyForm({ survey, onComplete }: SurveyFormProps) {
               '& p': {
                 mb: 2,
                 lineHeight: 1.8,
-                fontSize: '1rem',
+                fontSize: currentFontSize.body1,
                 color: '#374151',
               },
               '& ul, & ol': {
@@ -588,21 +824,22 @@ export default function SurveyForm({ survey, onComplete }: SurveyFormProps) {
                 mb: 1,
                 lineHeight: 1.8,
                 color: '#374151',
+                fontSize: currentFontSize.body1,
               },
               '& h1': {
-                fontSize: '2rem',
+                fontSize: currentFontSize.h1,
                 fontWeight: 700,
                 mb: 2,
                 mt: 3,
               },
               '& h2': {
-                fontSize: '1.5rem',
+                fontSize: currentFontSize.h2,
                 fontWeight: 600,
                 mb: 1.5,
                 mt: 2.5,
               },
               '& h3': {
-                fontSize: '1.25rem',
+                fontSize: currentFontSize.h3,
                 fontWeight: 600,
                 mb: 1,
                 mt: 2,
@@ -624,7 +861,7 @@ export default function SurveyForm({ survey, onComplete }: SurveyFormProps) {
                 borderRadius: 2,
                 px: 4,
                 py: 1.5,
-                fontSize: '1rem',
+                fontSize: currentFontSize.body1,
                 fontWeight: 600,
                 backgroundColor: '#3B82F6',
                 '&:hover': {
@@ -638,18 +875,21 @@ export default function SurveyForm({ survey, onComplete }: SurveyFormProps) {
           
           {/* 푸터 */}
           <Box sx={{ textAlign: 'center', mt: 4 }}>
-            <Typography variant="caption" sx={{ color: '#9CA3AF' }}>
+            <Typography variant="caption" sx={{ color: '#9CA3AF', fontSize: currentFontSize.caption }}>
               Powered by SurveyMachine
             </Typography>
           </Box>
         </Container>
+        </Box>
       </Box>
     );
   }
-  
+
   return (
-    <Box sx={{ minHeight: '100vh', backgroundColor: '#F8FAFC' }}>
-      <Container maxWidth="md" sx={{ py: 4 }}>
+    <Box sx={{ minHeight: '100vh', backgroundColor: '#F8FAFC', display: 'flex' }}>
+      {renderNavigationBar()}
+      <Box sx={{ flex: 1, marginLeft: showNavigation ? '280px' : 0 }}>
+        <Container maxWidth="md" sx={{ py: 4 }}>
         {/* 헤더 - 로고와 진행바 */}
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
           {/* 로고 영역 */}
@@ -693,12 +933,12 @@ export default function SurveyForm({ survey, onComplete }: SurveyFormProps) {
             {(survey.organization_name || survey.organization_subtitle) && (
               <Box>
                 {survey.organization_subtitle && (
-                  <Typography variant="caption" sx={{ color: '#6B7280', display: 'block', lineHeight: 1.2 }}>
+                  <Typography variant="caption" sx={{ color: '#6B7280', display: 'block', lineHeight: 1.2, fontSize: currentFontSize.caption }}>
                     {survey.organization_subtitle}
                   </Typography>
                 )}
                 {survey.organization_name && (
-                  <Typography variant="h6" sx={{ color: '#3B82F6', fontWeight: 700, lineHeight: 1.2 }}>
+                  <Typography variant="h6" sx={{ color: '#3B82F6', fontWeight: 700, lineHeight: 1.2, fontSize: currentFontSize.h6 }}>
                     {survey.organization_name}
                   </Typography>
                 )}
@@ -706,25 +946,68 @@ export default function SurveyForm({ survey, onComplete }: SurveyFormProps) {
             )}
           </Box>
           
-          {/* 진행바 */}
-          <Box sx={{ width: 200 }}>
-            <Box
-              sx={{
-                height: 6,
-                borderRadius: 3,
-                backgroundColor: '#E5E7EB',
-                overflow: 'hidden',
-              }}
-            >
+          {/* 진행바와 글씨 크기 조절 */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            {/* 글씨 크기 조절 버튼 */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, border: '1px solid #E5E7EB', borderRadius: 2, p: 0.5 }}>
+              <Tooltip title="글씨 크기 줄이기">
+                <IconButton
+                  size="small"
+                  onClick={handleFontSizeDecrease}
+                  disabled={fontSizeLevel <= MIN_FONT_SIZE_LEVEL}
+                  sx={{
+                    color: fontSizeLevel <= MIN_FONT_SIZE_LEVEL ? '#D1D5DB' : '#6B7280',
+                    '&:hover': {
+                      backgroundColor: fontSizeLevel <= MIN_FONT_SIZE_LEVEL ? 'transparent' : '#F3F4F6',
+                    },
+                    '&.Mui-disabled': {
+                      color: '#D1D5DB',
+                    },
+                  }}
+                >
+                  <Remove fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="글씨 크기 늘리기">
+                <IconButton
+                  size="small"
+                  onClick={handleFontSizeIncrease}
+                  disabled={fontSizeLevel >= MAX_FONT_SIZE_LEVEL}
+                  sx={{
+                    color: fontSizeLevel >= MAX_FONT_SIZE_LEVEL ? '#D1D5DB' : '#6B7280',
+                    '&:hover': {
+                      backgroundColor: fontSizeLevel >= MAX_FONT_SIZE_LEVEL ? 'transparent' : '#F3F4F6',
+                    },
+                    '&.Mui-disabled': {
+                      color: '#D1D5DB',
+                    },
+                  }}
+                >
+                  <Add fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            </Box>
+            
+            {/* 진행바 */}
+            <Box sx={{ width: 200 }}>
               <Box
                 sx={{
-                  height: '100%',
-                  width: `${((currentQuestionIndex + 1) / visibleQuestions.length) * 100}%`,
-                  backgroundColor: '#3B82F6',
+                  height: 6,
                   borderRadius: 3,
-                  transition: 'width 0.3s ease',
+                  backgroundColor: '#E5E7EB',
+                  overflow: 'hidden',
                 }}
-              />
+              >
+                <Box
+                  sx={{
+                    height: '100%',
+                    width: `${((currentQuestionIndex + 1) / visibleQuestions.length) * 100}%`,
+                    backgroundColor: '#3B82F6',
+                    borderRadius: 3,
+                    transition: 'width 0.3s ease',
+                  }}
+                />
+              </Box>
             </Box>
           </Box>
         </Box>
@@ -739,7 +1022,7 @@ export default function SurveyForm({ survey, onComplete }: SurveyFormProps) {
               mb: 3,
             }}
           >
-            <Typography variant="h6" fontWeight={600} sx={{ color: '#1F2937' }}>
+            <Typography variant="h6" fontWeight={600} sx={{ color: '#1F2937', fontSize: currentFontSize.h6 }}>
               {currentSectionLetter && `${currentSectionLetter}. `}{currentSection.title}
             </Typography>
           </Box>
@@ -757,6 +1040,7 @@ export default function SurveyForm({ survey, onComplete }: SurveyFormProps) {
               error={errors[currentQuestion.id!]}
               allQuestions={allQuestions}
               allAnswers={answers}
+              fontSize={currentFontSize}
             />
           </>
         )}
@@ -773,10 +1057,10 @@ export default function SurveyForm({ survey, onComplete }: SurveyFormProps) {
               backgroundColor: 'white',
             }}
           >
-            <Typography variant="h6" fontWeight={600} gutterBottom>
+            <Typography variant="h6" fontWeight={600} gutterBottom sx={{ fontSize: currentFontSize.h6 }}>
               응답자 정보
             </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2, fontSize: currentFontSize.body2 }}>
               중복 제출 방지를 위해 식별 정보를 입력해주세요. (이메일 또는 전화번호)
             </Typography>
             <TextField
@@ -841,11 +1125,12 @@ export default function SurveyForm({ survey, onComplete }: SurveyFormProps) {
         
         {/* 푸터 */}
         <Box sx={{ textAlign: 'center', mt: 4 }}>
-          <Typography variant="caption" sx={{ color: '#9CA3AF' }}>
+          <Typography variant="caption" sx={{ color: '#9CA3AF', fontSize: currentFontSize.caption }}>
             Powered by SurveyMachine
           </Typography>
         </Box>
       </Container>
+      </Box>
     </Box>
   );
 }
