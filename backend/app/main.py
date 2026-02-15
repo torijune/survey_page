@@ -15,14 +15,19 @@ app = FastAPI(
     redirect_slashes=False
 )
 
-# CORS 설정 - 모든 도메인 허용
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# CORS 설정
+# Lambda Function URL의 CORS 설정이 있으면 중복 헤더가 발생하므로
+# Lambda 환경에서는 비활성화하고, 로컬 개발 환경에서만 활성화
+# Lambda 환경 확인: AWS_LAMBDA_FUNCTION_NAME 환경 변수가 있으면 Lambda 환경
+if not os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
+    # 로컬 개발 환경에서만 CORS 미들웨어 활성화
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=False,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 # 라우터 등록
 try:
@@ -38,10 +43,16 @@ logger.info("라우터 등록 시작...")
 if survey_router:
     app.include_router(survey_router, prefix="/api/v1/surveys", tags=["surveys"])
     logger.info("survey_router 등록 완료")
+    
+    # 등록된 라우트 확인
+    logger.info(f"등록된 라우트 목록:")
+    for route in app.routes:
+        if hasattr(route, 'path') and hasattr(route, 'methods'):
+            logger.info(f"  {list(route.methods)} {route.path}")
 else:
     logger.error("survey_router가 None이므로 등록하지 않음")
 
-logger.info("라우터 등록 완료")
+logger.info(f"라우터 등록 완료 (총 {len(app.routes)}개 라우트)")
 
 
 @app.get("/")

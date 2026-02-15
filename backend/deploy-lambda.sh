@@ -58,6 +58,12 @@ if aws lambda get-function --function-name $LAMBDA_FUNCTION --region $AWS_REGION
         --function-name $LAMBDA_FUNCTION \
         --image-uri $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:latest \
         --region $AWS_REGION
+    
+    echo "⏳ Lambda 함수 업데이트 완료 대기 중..."
+    aws lambda wait function-updated \
+        --function-name $LAMBDA_FUNCTION \
+        --region $AWS_REGION
+    echo "✅ Lambda 함수 업데이트 완료"
 else
     echo "🆕 Lambda 함수 생성 중..."
     
@@ -100,21 +106,57 @@ else
         --timeout 900 \
         --memory-size 2048 \
         --region $AWS_REGION
+    
+    echo "⏳ Lambda 함수 생성 완료 대기 중..."
+    aws lambda wait function-active \
+        --function-name $LAMBDA_FUNCTION \
+        --region $AWS_REGION
+    echo "✅ Lambda 함수 생성 완료"
 fi
 
-# 7. Function URL 설정 (CORS는 FastAPI에서 처리)
+# 7. Function URL 설정 및 CORS 설정
 echo "🌐 Function URL 설정 중..."
-FUNCTION_URL=$(aws lambda create-function-url-config \
-    --function-name $LAMBDA_FUNCTION \
-    --auth-type NONE \
-    --region $AWS_REGION \
-    --query 'FunctionUrl' \
-    --output text 2>/dev/null || \
-aws lambda get-function-url-config \
+
+# Function URL이 이미 존재하는지 확인
+EXISTING_URL=$(aws lambda get-function-url-config \
     --function-name $LAMBDA_FUNCTION \
     --region $AWS_REGION \
     --query 'FunctionUrl' \
-    --output text)
+    --output text 2>/dev/null)
+
+if [ -z "$EXISTING_URL" ]; then
+    # Function URL 생성 (CORS 포함)
+    echo "🆕 Function URL 생성 중..."
+    FUNCTION_URL=$(aws lambda create-function-url-config \
+        --function-name $LAMBDA_FUNCTION \
+        --auth-type NONE \
+        --cors '{
+            "AllowCredentials": false,
+            "AllowHeaders": ["*"],
+            "AllowMethods": ["*"],
+            "AllowOrigins": ["*"],
+            "ExposeHeaders": [],
+            "MaxAge": 300
+        }' \
+        --region $AWS_REGION \
+        --query 'FunctionUrl' \
+        --output text)
+else
+    # 기존 Function URL의 CORS 업데이트
+    echo "📝 기존 Function URL의 CORS 설정 업데이트 중..."
+    FUNCTION_URL=$EXISTING_URL
+    aws lambda update-function-url-config \
+        --function-name $LAMBDA_FUNCTION \
+        --cors '{
+            "AllowCredentials": false,
+            "AllowHeaders": ["*"],
+            "AllowMethods": ["*"],
+            "AllowOrigins": ["*"],
+            "ExposeHeaders": [],
+            "MaxAge": 300
+        }' \
+        --region $AWS_REGION
+fi
 
 echo ""
 echo "🎉 배포 완료!"

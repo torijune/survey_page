@@ -64,6 +64,8 @@ export default function SurveyPreviewPage() {
       title: survey.title,
       description: survey.description,
       intro_content: survey.intro_content,
+      first_page_content: survey.first_page_content,
+      completion_content: survey.completion_content,
       allow_edit: survey.allow_edit,
       duplicate_prevention: survey.duplicate_prevention,
     });

@@ -21,6 +21,10 @@ import {
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
+import { remarkPreserveNewlines } from '../../../lib/remarkPreserveNewlines';
+import { apiConfig } from '../../../config/api';
+
+const markdownPlugins = [remarkGfm, remarkBreaks, remarkPreserveNewlines()];
 
 interface MarkdownEditorProps {
   value: string;
@@ -28,6 +32,8 @@ interface MarkdownEditorProps {
   label?: string;
   placeholder?: string;
   rows?: number;
+  /** 에디터 아래 실시간 미리보기 표시 (이미지 등 실제 렌더링 확인) */
+  showLivePreview?: boolean;
 }
 
 export default function MarkdownEditor({
@@ -36,6 +42,7 @@ export default function MarkdownEditor({
   label = 'Markdown 콘텐츠',
   placeholder = '# 제목\n\n## 소제목\n\n- 목록 항목 1\n- 목록 항목 2\n\n**굵은 글씨** *기울임*',
   rows = 15,
+  showLivePreview = true,
 }: MarkdownEditorProps) {
   const [showPreview, setShowPreview] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -81,10 +88,7 @@ export default function MarkdownEditor({
       formData.append('file', file);
 
       // 백엔드 API를 통해 이미지 업로드
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 
-        (process.env.NODE_ENV === 'production' 
-          ? 'https://na6biybdk3xhs2lk337vtujjd40dbvcv.lambda-url.us-east-1.on.aws'
-          : 'http://localhost:8000');
+      const apiUrl = apiConfig.baseURL;
       
       const response = await fetch(`${apiUrl}/api/v1/surveys/upload-image`, {
         method: 'POST',
@@ -315,6 +319,40 @@ export default function MarkdownEditor({
               },
             }}
           />
+          {/* 실시간 미리보기: 이미지 등이 실제로 보이도록 */}
+          {showLivePreview && value.trim() !== '' && (
+            <Paper
+              elevation={0}
+              sx={{
+                mt: 2,
+                p: 2,
+                border: '1px solid #E5E7EB',
+                borderRadius: 2,
+                backgroundColor: '#FAFAFA',
+                maxHeight: 320,
+                overflow: 'auto',
+                '& img': {
+                  maxWidth: '100%',
+                  height: 'auto',
+                  borderRadius: 2,
+                  mb: 2,
+                  display: 'block',
+                },
+                '& p': { mb: 2, lineHeight: 1.8 },
+                '& ul, & ol': { pl: 3, mb: 2 },
+                '& h1': { fontSize: '1.25rem', fontWeight: 700, mb: 1, mt: 2 },
+                '& h2': { fontSize: '1.1rem', fontWeight: 600, mb: 1, mt: 1.5 },
+                '& h3': { fontSize: '1rem', fontWeight: 600, mb: 0.5, mt: 1 },
+                '& code': { backgroundColor: '#F3F4F6', padding: '2px 6px', borderRadius: 1 },
+                '& pre': { backgroundColor: '#F3F4F6', padding: 2, borderRadius: 1, overflow: 'auto' },
+              }}
+            >
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                실시간 미리보기
+              </Typography>
+              <ReactMarkdown remarkPlugins={markdownPlugins}>{value}</ReactMarkdown>
+            </Paper>
+          )}
         </Box>
       ) : (
         <Paper
@@ -374,7 +412,7 @@ export default function MarkdownEditor({
           }}
         >
           {value ? (
-            <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{value}</ReactMarkdown>
+            <ReactMarkdown remarkPlugins={markdownPlugins}>{value}</ReactMarkdown>
           ) : (
             <Typography color="text.secondary" fontStyle="italic">
               미리보기를 보려면 콘텐츠를 입력하세요.
@@ -384,7 +422,7 @@ export default function MarkdownEditor({
       )}
 
       <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-        Markdown 형식으로 작성하세요. # 제목, ## 소제목, - 목록, **굵게**, *기울임* 등을 사용할 수 있습니다.
+        Markdown 형식으로 작성하세요. # 제목, ## 소제목, - 목록, **굵게**, *기울임* 등. 엔터로 줄바꿈이 적용됩니다.
       </Typography>
     </Box>
   );

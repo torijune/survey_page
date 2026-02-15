@@ -1,4 +1,4 @@
-import React, { useState, memo } from 'react';
+import React, { useState, useRef, memo } from 'react';
 import {
   Box,
   Button,
@@ -19,6 +19,8 @@ interface SectionEditorProps {
   onChange: (section: Section) => void;
   onDelete: () => void;
   onAddQuestion: () => void;
+  onInsertQuestion?: (questionIndex: number) => void;
+  onMoveQuestion?: (fromIndex: number, toIndex: number) => void;
   onDeleteQuestion: (questionIndex: number) => void;
   onQuestionChange: (questionIndex: number, question: Question) => void;
   onSaveQuestion?: (questionIndex: number) => void;
@@ -32,6 +34,8 @@ function SectionEditor({
   onChange,
   onDelete,
   onAddQuestion,
+  onInsertQuestion,
+  onMoveQuestion,
   onDeleteQuestion,
   onQuestionChange,
   onSaveQuestion,
@@ -40,6 +44,9 @@ function SectionEditor({
 }: SectionEditorProps) {
   // 초기에는 접혀있도록 (렌더링 부담 감소)
   const [expanded, setExpanded] = useState(false);
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const draggedIndexRef = useRef<number | null>(null);
   
   return (
     <Paper
@@ -127,17 +134,77 @@ function SectionEditor({
           </Typography>
           
           {section.questions.map((question, qIndex) => (
-            <QuestionEditor
-              key={question.id || qIndex}
-              question={question}
-              onChange={(q) => onQuestionChange(qIndex, q)}
-              onDelete={() => onDeleteQuestion(qIndex)}
-              onSave={onSaveQuestion ? () => onSaveQuestion(qIndex) : undefined}
-              onToggleHide={onToggleQuestionHide ? () => onToggleQuestionHide(qIndex) : undefined}
-              isNew={!question.id}
-              allQuestions={allQuestions}
-              currentQuestionId={question.id}
-            />
+            <Box
+              key={question.id || `q-${qIndex}`}
+              sx={{
+                mb: 2,
+                opacity: draggedIndex === qIndex ? 0.5 : 1,
+                border: dragOverIndex === qIndex ? '2px dashed' : '2px solid transparent',
+                borderColor: dragOverIndex === qIndex ? 'primary.main' : 'transparent',
+                borderRadius: 2,
+                transition: 'all 0.2s',
+              }}
+              draggable={!!onMoveQuestion}
+              onDragStart={(e) => {
+                if (onMoveQuestion) {
+                  draggedIndexRef.current = qIndex;
+                  setDraggedIndex(qIndex);
+                  e.dataTransfer.setData('text/plain', String(qIndex));
+                  e.dataTransfer.effectAllowed = 'move';
+                }
+              }}
+              onDragOver={(e) => {
+                if (onMoveQuestion && draggedIndexRef.current !== null && draggedIndexRef.current !== qIndex) {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = 'move';
+                  setDragOverIndex(qIndex);
+                }
+              }}
+              onDragLeave={() => setDragOverIndex(null)}
+              onDrop={(e) => {
+                e.preventDefault();
+                if (onMoveQuestion) {
+                  const fromIndex = parseInt(e.dataTransfer.getData('text/plain'), 10);
+                  if (!isNaN(fromIndex) && fromIndex !== qIndex) {
+                    onMoveQuestion(fromIndex, qIndex);
+                  }
+                  draggedIndexRef.current = null;
+                  setDraggedIndex(null);
+                  setDragOverIndex(null);
+                }
+              }}
+              onDragEnd={() => {
+                draggedIndexRef.current = null;
+                setDraggedIndex(null);
+                setDragOverIndex(null);
+              }}
+            >
+              {/* 문항 삽입 버튼 (위쪽) */}
+              {onInsertQuestion && (
+                <Button
+                  fullWidth
+                  startIcon={<Add />}
+                  onClick={() => onInsertQuestion(qIndex)}
+                  variant="outlined"
+                  size="small"
+                  sx={{ mb: 1, borderRadius: 2, borderStyle: 'dashed', color: 'grey.500' }}
+                >
+                  문항 삽입
+                </Button>
+              )}
+              <QuestionEditor
+                question={question}
+                onChange={(q) => onQuestionChange(qIndex, q)}
+                onDelete={() => onDeleteQuestion(qIndex)}
+                onSave={onSaveQuestion ? () => onSaveQuestion(qIndex) : undefined}
+                onToggleHide={onToggleQuestionHide ? () => onToggleQuestionHide(qIndex) : undefined}
+                isNew={!question.id}
+                allQuestions={allQuestions}
+                currentQuestionId={question.id}
+                collapsible
+                questionIndex={qIndex}
+              />
+            </Box>
           ))}
           
           <Button

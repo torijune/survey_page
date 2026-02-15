@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from uuid import UUID
 
 
@@ -17,7 +17,8 @@ class Survey:
     id: Optional[UUID] = None
     title: str = ""
     description: Optional[str] = None
-    intro_content: Optional[str] = None  # 설문 시작 페이지 콘텐츠 (HTML)
+    intro_content: Optional[str] = None  # 설문 시작 페이지 콘텐츠 (HTML) - 하위 호환성 유지
+    description_pages: Optional[List[Dict[str, Any]]] = None  # 여러 설명 페이지 (각 페이지: {index: str, content: str})
     status: SurveyStatus = SurveyStatus.DRAFT
     share_id: Optional[str] = None
     allow_edit: bool = True
@@ -29,6 +30,8 @@ class Survey:
     logo_width: Optional[int] = None  # 로고 너비 (픽셀, 기본값: 48)
     logo_height: Optional[int] = None  # 로고 높이 (픽셀, 기본값: 48)
     text_position: Optional[str] = None  # 텍스트 위치: 'left', 'right', 'top', 'bottom' (기본값: 'right')
+    first_page_content: Optional[str] = None  # 설문지 첫 페이지 콘텐츠 (Markdown, 설명 페이지와 별도)
+    completion_content: Optional[str] = None  # 설문 종료(완료) 페이지 콘텐츠 (Markdown)
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     
@@ -51,6 +54,7 @@ class Survey:
             "title": self.title,
             "description": self.description,
             "intro_content": self.intro_content,
+            "description_pages": self.description_pages,
             "status": self.status.value,
             "share_id": self.share_id,
             "allow_edit": self.allow_edit,
@@ -61,6 +65,8 @@ class Survey:
             "logo_width": self.logo_width,
             "logo_height": self.logo_height,
             "text_position": self.text_position,
+            "first_page_content": self.first_page_content,
+            "completion_content": self.completion_content,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "response_count": self.response_count,

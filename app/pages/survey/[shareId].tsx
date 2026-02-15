@@ -83,7 +83,7 @@ export default function SurveyPage() {
           <title>설문 완료 - {survey.title}</title>
         </Head>
         <Box sx={{ minHeight: '100vh', backgroundColor: '#F8FAFC' }}>
-          <SurveyComplete surveyTitle={survey.title} />
+          <SurveyComplete surveyTitle={survey.title} completionContent={survey.completion_content} />
         </Box>
       </>
     );

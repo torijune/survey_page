@@ -366,14 +366,20 @@ async def upload_image(file: UploadFile = File(...)):
         file_path = f"survey-images/{file_name}"
         
         # Storage에 업로드
+        logger.info(f"이미지 업로드 시작: {file_path}, 크기: {len(contents)} bytes")
         result = client.storage.from_("survey-images").upload(
             file_path,
             contents,
             file_options={"content-type": file.content_type}
         )
+        logger.info(f"이미지 업로드 결과: {result}")
         
         # Public URL 생성
         public_url = client.storage.from_("survey-images").get_public_url(file_path)
+        logger.info(f"생성된 Public URL: {public_url}")
+        
+        if not public_url:
+            raise HTTPException(status_code=500, detail="Public URL을 생성할 수 없습니다.")
         
         return {"url": public_url, "path": file_path}
     except HTTPException:
@@ -515,6 +521,7 @@ async def import_survey_from_pdf(file: UploadFile = File(...)):
                     question_number=question_data.get("question_number"),
                     likert_config=likert_config,
                     ranking_config=ranking_config,
+                    repeatable_config=question_data.get("repeatable_config"),
                 ))
                 
                 # 옵션 데이터 준비
@@ -702,6 +709,7 @@ async def update_survey_from_pdf(survey_id: str, file: UploadFile = File(...)):
                     question_number=question_data.get("question_number"),
                     likert_config=likert_config,
                     ranking_config=ranking_config,
+                    repeatable_config=question_data.get("repeatable_config"),
                 ))
                 
                 # 옵션 데이터 준비
@@ -759,11 +767,18 @@ async def update_survey_from_pdf(survey_id: str, file: UploadFile = File(...)):
 # ==================== Response Mappers ====================
 
 def _map_survey_response(survey) -> SurveyResponse:
+    # description_pages를 DescriptionPageResponse 리스트로 변환
+    description_pages = None
+    if survey.description_pages:
+        from app.survey.api.models.survey_models import DescriptionPageResponse
+        description_pages = [DescriptionPageResponse(index=page["index"], content=page["content"]) for page in survey.description_pages]
+    
     return SurveyResponse(
         id=str(survey.id),
         title=survey.title,
         description=survey.description,
         intro_content=survey.intro_content,
+        description_pages=description_pages,
         status=survey.status.value,
         share_id=survey.share_id,
         allow_edit=survey.allow_edit,
@@ -771,6 +786,11 @@ def _map_survey_response(survey) -> SurveyResponse:
         logo_url=survey.logo_url,
         organization_name=survey.organization_name,
         organization_subtitle=survey.organization_subtitle,
+        logo_width=survey.logo_width,
+        logo_height=survey.logo_height,
+        text_position=survey.text_position,
+        first_page_content=survey.first_page_content,
+        completion_content=survey.completion_content,
         sections=[_map_section_response(s) for s in survey.sections],
         response_count=survey.response_count,
         created_at=survey.created_at,
@@ -807,6 +827,8 @@ def _map_question_response(question) -> QuestionResponse:
         validation_rules=question.validation_rules.to_dict() if question.validation_rules else None,
         conditional_logic=question.conditional_logic.to_dict() if question.conditional_logic else None,
         likert_config=question.likert_config.to_dict() if question.likert_config else None,
+        ranking_config=question.ranking_config.to_dict() if question.ranking_config else None,
+        repeatable_config=question.repeatable_config,
         options=[
             {
                 "id": str(opt.id),
@@ -848,42 +870,4 @@ def _map_response_response(response) -> ResponseResponse:
     )
 
 
-# ==================== Image Upload ====================
-
-@router.post("/upload-image")
-async def upload_image(file: UploadFile = File(...)):
-    """이미지 업로드"""
-    try:
-        # 파일 유형 검증
-        allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
-        if file.content_type not in allowed_types:
-            raise HTTPException(status_code=400, detail="지원하지 않는 이미지 형식입니다. (JPEG, PNG, GIF, WebP만 가능)")
-        
-        # 파일 크기 검증 (5MB 제한)
-        contents = await file.read()
-        if len(contents) > 5 * 1024 * 1024:
-            raise HTTPException(status_code=400, detail="파일 크기는 5MB 이하만 가능합니다.")
-        
-        # 파일명 생성
-        ext = file.filename.split('.')[-1] if '.' in file.filename else 'jpg'
-        filename = f"survey-images/{uuid4()}.{ext}"
-        
-        # Supabase Storage에 업로드
-        supabase = survey_supabase_client.get_client()
-        result = supabase.storage.from_("survey-assets").upload(
-            filename,
-            contents,
-            file_options={"content-type": file.content_type}
-        )
-        
-        # 공개 URL 생성
-        public_url = supabase.storage.from_("survey-assets").get_public_url(filename)
-        
-        return {"url": public_url}
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"이미지 업로드 실패: {e}")
-        raise HTTPException(status_code=500, detail=f"이미지 업로드 실패: {str(e)}")
 

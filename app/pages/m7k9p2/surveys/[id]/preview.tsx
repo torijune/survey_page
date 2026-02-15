@@ -25,7 +25,7 @@ import {
   createQuestion,
   deleteQuestion,
 } from '../../../../api/surveys';
-import { SurveyForm } from '../../../../components/survey';
+import { SurveyForm, SurveyComplete } from '../../../../components/survey';
 import EditablePreview from '../../../../components/survey/admin/EditablePreview';
 
 type ViewMode = 'edit' | 'preview';
@@ -37,12 +37,17 @@ export default function SurveyPreviewPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('edit');
+  const [previewCompleted, setPreviewCompleted] = useState(false);
   
   useEffect(() => {
     if (id && typeof id === 'string') {
       loadSurvey(id);
     }
   }, [id]);
+
+  useEffect(() => {
+    if (viewMode === 'edit') setPreviewCompleted(false);
+  }, [viewMode]);
   
   const loadSurvey = async (surveyId: string) => {
     try {
@@ -60,13 +65,23 @@ export default function SurveyPreviewPage() {
     if (!survey) return;
     
     // 설문 정보 저장
-    await updateSurvey(survey.id!, {
+    const updateData = {
       title: survey.title,
       description: survey.description,
-      intro_content: survey.intro_content,
+      description_pages: survey.description_pages,
       allow_edit: survey.allow_edit,
       duplicate_prevention: survey.duplicate_prevention,
-    });
+      logo_url: survey.logo_url,
+      organization_name: survey.organization_name,
+      organization_subtitle: survey.organization_subtitle,
+      logo_width: survey.logo_width,
+      logo_height: survey.logo_height,
+      text_position: survey.text_position,
+      first_page_content: survey.first_page_content,
+      completion_content: survey.completion_content,
+    };
+    console.log('미리보기 저장 데이터:', updateData);
+    await updateSurvey(survey.id!, updateData);
     
     // 새 섹션 생성 (순차 처리 - ID가 필요하므로)
     for (let sIndex = 0; sIndex < survey.sections.length; sIndex++) {
@@ -157,6 +172,25 @@ export default function SurveyPreviewPage() {
       }
     }
     await Promise.all(questionUpdatePromises);
+    
+    // 저장 후 설문 다시 로드
+    if (survey?.id) {
+      console.log('저장 전 설문 상태:', {
+        logo_url: survey.logo_url,
+        logo_width: survey.logo_width,
+        logo_height: survey.logo_height,
+        text_position: survey.text_position,
+      });
+      const updatedSurvey = await getSurvey(survey.id);
+      console.log('저장 후 로드된 설문:', updatedSurvey);
+      console.log('저장 후 로드된 설문 상태:', {
+        logo_url: updatedSurvey.logo_url,
+        logo_width: updatedSurvey.logo_width,
+        logo_height: updatedSurvey.logo_height,
+        text_position: updatedSurvey.text_position,
+      });
+      setSurvey(updatedSurvey);
+    }
   };
   
   if (loading) {
@@ -241,14 +275,28 @@ export default function SurveyPreviewPage() {
             onSurveyChange={setSurvey}
             onSave={handleSave}
           />
+        ) : previewCompleted ? (
+          <Box sx={{ minHeight: '100vh', backgroundColor: '#F8FAFC', pt: 2 }}>
+            <Alert severity="info" sx={{ mx: 2, mb: 2, borderRadius: 2 }}>
+              미리보기입니다. 응답은 저장되지 않았습니다.
+            </Alert>
+            <SurveyComplete surveyTitle={survey.title || '설문'} completionContent={survey.completion_content} />
+            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
+              <Button
+                variant="outlined"
+                startIcon={<ArrowBack />}
+                onClick={() => setPreviewCompleted(false)}
+              >
+                다시 미리보기
+              </Button>
+            </Box>
+          </Box>
         ) : (
           <SurveyForm
             survey={survey}
-            onComplete={() => {
-              alert('미리보기 모드에서는 응답이 제출되지 않습니다.');
-              router.push(`/m7k9p2/surveys/${id}/edit`);
-            }}
+            onComplete={() => setPreviewCompleted(true)}
             showNavigation={true}
+            isPreview={true}
           />
         )}
       </Box>

@@ -33,6 +33,7 @@ class SurveyRepositoryImpl(SurveyRepository):
                 "title": survey.title,
                 "description": survey.description,
                 "intro_content": survey.intro_content,
+                "description_pages": survey.description_pages,
                 "status": survey.status.value,
                 "allow_edit": survey.allow_edit,
                 "duplicate_prevention": survey.duplicate_prevention,
@@ -241,6 +242,7 @@ class SurveyRepositoryImpl(SurveyRepository):
                 "title": survey.title,
                 "description": survey.description,
                 "intro_content": survey.intro_content,
+                "description_pages": survey.description_pages,
                 "allow_edit": survey.allow_edit,
                 "duplicate_prevention": survey.duplicate_prevention,
                 "logo_url": survey.logo_url,
@@ -249,12 +251,19 @@ class SurveyRepositoryImpl(SurveyRepository):
                 "logo_width": survey.logo_width,
                 "logo_height": survey.logo_height,
                 "text_position": survey.text_position,
+                "first_page_content": survey.first_page_content,
+                "completion_content": survey.completion_content,
             }
+            logger.info(f"설문 업데이트 데이터: {data}")
+            logger.info(f"로고 URL: {data.get('logo_url')}, 크기: {data.get('logo_width')}x{data.get('logo_height')}, 위치: {data.get('text_position')}")
             
             result = self.client.table("surveys").update(data).eq("id", str(survey.id)).execute()
             
+            logger.info(f"업데이트 결과: {result.data}")
             if result.data:
-                return self._map_to_survey(result.data[0])
+                updated_survey = self._map_to_survey(result.data[0])
+                logger.info(f"매핑된 설문 로고 URL: {updated_survey.logo_url}")
+                return updated_survey
             raise Exception("설문 수정 실패")
         except Exception as e:
             logger.error(f"설문 수정 실패: {e}")
@@ -416,6 +425,7 @@ class SurveyRepositoryImpl(SurveyRepository):
                 "conditional_logic": question.conditional_logic.to_dict() if question.conditional_logic else None,
                 "likert_config": question.likert_config.to_dict() if question.likert_config else None,
                 "ranking_config": question.ranking_config.to_dict() if question.ranking_config else None,
+                "repeatable_config": question.repeatable_config,
             }
             
             result = self.client.table("questions").insert(data).execute()
@@ -448,6 +458,7 @@ class SurveyRepositoryImpl(SurveyRepository):
                     "conditional_logic": question.conditional_logic.to_dict() if question.conditional_logic else None,
                     "likert_config": question.likert_config.to_dict() if question.likert_config else None,
                     "ranking_config": question.ranking_config.to_dict() if question.ranking_config else None,
+                    "repeatable_config": question.repeatable_config,
                 }
                 for question in questions
             ]
@@ -482,6 +493,7 @@ class SurveyRepositoryImpl(SurveyRepository):
                 "conditional_logic": question.conditional_logic.to_dict() if question.conditional_logic else None,
                 "likert_config": question.likert_config.to_dict() if question.likert_config else None,
                 "ranking_config": question.ranking_config.to_dict() if question.ranking_config else None,
+                "repeatable_config": question.repeatable_config,
             }
             
             result = self.client.table("questions").update(data).eq("id", str(question.id)).execute()
@@ -580,6 +592,7 @@ class SurveyRepositoryImpl(SurveyRepository):
             title=data["title"],
             description=data.get("description"),
             intro_content=data.get("intro_content"),
+            description_pages=data.get("description_pages"),
             status=SurveyStatus(data["status"]),
             share_id=data.get("share_id"),
             allow_edit=data.get("allow_edit", True),
@@ -590,6 +603,8 @@ class SurveyRepositoryImpl(SurveyRepository):
             logo_width=data.get("logo_width"),
             logo_height=data.get("logo_height"),
             text_position=data.get("text_position"),
+            first_page_content=data.get("first_page_content"),
+            completion_content=data.get("completion_content"),
             created_at=datetime.fromisoformat(data["created_at"].replace("Z", "+00:00")) if data.get("created_at") else None,
             updated_at=datetime.fromisoformat(data["updated_at"].replace("Z", "+00:00")) if data.get("updated_at") else None,
         )
@@ -622,6 +637,7 @@ class SurveyRepositoryImpl(SurveyRepository):
             conditional_logic=ConditionalLogic.from_dict(data.get("conditional_logic")),
             likert_config=LikertConfig.from_dict(data.get("likert_config")),
             ranking_config=RankingConfig.from_dict(data.get("ranking_config")),
+            repeatable_config=data.get("repeatable_config"),
             created_at=datetime.fromisoformat(data["created_at"].replace("Z", "+00:00")) if data.get("created_at") else None,
             updated_at=datetime.fromisoformat(data["updated_at"].replace("Z", "+00:00")) if data.get("updated_at") else None,
         )

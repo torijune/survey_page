@@ -53,6 +53,7 @@ class QuestionCreateRequest(BaseModel):
     conditional_logic: Optional[ConditionalLogicRequest] = None
     likert_config: Optional[LikertConfigRequest] = None
     ranking_config: Optional[RankingConfigRequest] = None
+    repeatable_config: Optional[Dict[str, Any]] = None  # {"parts": [{"type": "text"|"input", "value"?, "key"?}]}
     options: Optional[List[QuestionOptionRequest]] = None
 
 
@@ -68,6 +69,7 @@ class QuestionUpdateRequest(BaseModel):
     conditional_logic: Optional[ConditionalLogicRequest] = None
     likert_config: Optional[LikertConfigRequest] = None
     ranking_config: Optional[RankingConfigRequest] = None
+    repeatable_config: Optional[Dict[str, Any]] = None
     options: Optional[List[QuestionOptionRequest]] = None
 
 
@@ -88,10 +90,15 @@ class SectionUpdateRequest(BaseModel):
     conditional_logic: Optional[Dict[str, Any]] = None
 
 
+class DescriptionPageRequest(BaseModel):
+    index: str  # Desc1, Desc2, ...
+    content: str
+
 class SurveyCreateRequest(BaseModel):
     title: str
     description: Optional[str] = None
     intro_content: Optional[str] = None
+    description_pages: Optional[List[DescriptionPageRequest]] = None
     allow_edit: bool = True
     duplicate_prevention: bool = False
     logo_url: Optional[str] = None
@@ -100,12 +107,15 @@ class SurveyCreateRequest(BaseModel):
     logo_width: Optional[int] = None
     logo_height: Optional[int] = None
     text_position: Optional[str] = None
+    first_page_content: Optional[str] = None
+    completion_content: Optional[str] = None
 
 
 class SurveyUpdateRequest(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     intro_content: Optional[str] = None
+    description_pages: Optional[List[DescriptionPageRequest]] = None
     allow_edit: Optional[bool] = None
     duplicate_prevention: Optional[bool] = None
     logo_url: Optional[str] = None
@@ -114,6 +124,8 @@ class SurveyUpdateRequest(BaseModel):
     logo_width: Optional[int] = None
     logo_height: Optional[int] = None
     text_position: Optional[str] = None
+    first_page_content: Optional[str] = None
+    completion_content: Optional[str] = None
 
 
 # ==================== Response Models ====================
@@ -142,6 +154,7 @@ class QuestionResponse(BaseModel):
     conditional_logic: Optional[Dict[str, Any]] = None
     likert_config: Optional[Dict[str, Any]] = None
     ranking_config: Optional[Dict[str, Any]] = None
+    repeatable_config: Optional[Dict[str, Any]] = None
     options: List[QuestionOptionResponse] = []
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
@@ -160,11 +173,16 @@ class SectionResponse(BaseModel):
     updated_at: Optional[datetime] = None
 
 
+class DescriptionPageResponse(BaseModel):
+    index: str
+    content: str
+
 class SurveyResponse(BaseModel):
     id: str
     title: str
     description: Optional[str] = None
     intro_content: Optional[str] = None
+    description_pages: Optional[List[DescriptionPageResponse]] = None
     status: str
     share_id: Optional[str] = None
     allow_edit: bool
@@ -175,6 +193,8 @@ class SurveyResponse(BaseModel):
     logo_width: Optional[int] = None
     logo_height: Optional[int] = None
     text_position: Optional[str] = None
+    first_page_content: Optional[str] = None
+    completion_content: Optional[str] = None
     sections: List[SectionResponse] = []
     response_count: int = 0
     created_at: Optional[datetime] = None

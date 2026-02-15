@@ -23,6 +23,7 @@ import {
   InputLabel,
   Slider,
   FormHelperText,
+  Collapse,
 } from '@mui/material';
 import {
   Save,
@@ -38,6 +39,8 @@ import {
   Edit,
   Close,
   Settings,
+  ExpandMore,
+  ExpandLess,
 } from '@mui/icons-material';
 import {
   Survey,
@@ -56,6 +59,9 @@ import {
 import EditableText from './EditableText';
 import EditableLikert from './EditableLikert';
 import MarkdownEditor from './MarkdownEditor';
+import ResizableImage from './ResizableImage';
+import FirstPageEditor from './FirstPageEditor';
+import FirstPageRenderer from '../FirstPageRenderer';
 import {
   SingleChoiceQuestion,
   MultipleChoiceQuestion,
@@ -97,6 +103,15 @@ export default function EditablePreview({
   const [dragOverLogo, setDragOverLogo] = useState(false);
   const [logoSettingsOpen, setLogoSettingsOpen] = useState(false);
   const logoInputRef = React.useRef<HTMLInputElement>(null);
+  const [expandedDescIndices, setExpandedDescIndices] = useState<Set<number>>(new Set());
+  const toggleDescExpanded = (index: number) => {
+    setExpandedDescIndices(prev => {
+      const next = new Set(prev);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
+  };
 
   // 모든 질문을 평탄화
   const allQuestions = useMemo(() => {
@@ -137,9 +152,15 @@ export default function EditablePreview({
     setUploadingLogo(true);
     try {
       const url = await uploadImage(file);
+      console.log('로고 업로드 성공, URL:', url);
+      if (!url) {
+        throw new Error('업로드된 이미지 URL을 받지 못했습니다.');
+      }
       handleSurveyChange('logo_url', url);
+      console.log('로고 URL 저장됨:', url);
       showSnackbar('로고가 업로드되었습니다.', 'success');
     } catch (err: any) {
+      console.error('로고 업로드 실패:', err);
       showSnackbar(err.message || '로고 업로드에 실패했습니다.', 'error');
     } finally {
       setUploadingLogo(false);
@@ -368,9 +389,9 @@ export default function EditablePreview({
     return 'center';
   }, [survey.text_position]);
 
-  // 문항 렌더링
+  // 문항 렌더링 (표시 번호: 사용자가 입력한 question_number만 사용, 자동 생성 인덱스는 표시하지 않음)
   const renderQuestion = (question: Question, sectionIndex: number, questionIndex: number) => {
-    const questionNumber = getQuestionNumber(sectionIndex, questionIndex);
+    const questionNumber = question.question_number || '';
     const isSelected = selectedElement === `q-${sectionIndex}-${questionIndex}`;
 
     return (
@@ -428,9 +449,11 @@ export default function EditablePreview({
 
         {/* 문항 제목 */}
         <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, mb: 2 }}>
-          <Typography variant="body1" fontWeight={600} sx={{ color: '#6B7280', minWidth: 40 }}>
-            {questionNumber}.
-          </Typography>
+          {questionNumber && (
+            <Typography variant="body1" fontWeight={600} sx={{ color: '#6B7280', minWidth: 40 }}>
+              {questionNumber}.
+            </Typography>
+          )}
           <Box sx={{ flex: 1 }}>
             <EditableText
               value={question.title}
@@ -449,13 +472,15 @@ export default function EditablePreview({
           </Box>
         </Box>
 
-        {/* 문항 설명 */}
+        {/* 문항 설명 (마크다운·이미지, 질문과 선택지 사이 표시) */}
         <Box sx={{ ml: 5, mb: 2 }}>
-          <EditableText
+          <MarkdownEditor
             value={question.description || ''}
             onChange={(value) => handleQuestionChange(sectionIndex, questionIndex, 'description', value)}
-            variant="caption"
-            placeholder="설명 추가 (선택사항)"
+            label=""
+            placeholder="설명 추가 (선택사항, 이미지 드래그 앤 드롭 가능)"
+            rows={4}
+            showLivePreview={true}
           />
         </Box>
 
@@ -627,6 +652,31 @@ export default function EditablePreview({
             )}
           </Box>
         )}
+
+        {/* 반복 입력 (주소 등) */}
+        {question.type === 'repeatable_inputs' && (
+          <Box sx={{ ml: 5, mt: 2 }}>
+            {(question.repeatable_config?.parts?.length ?? 0) > 0 ? (
+              <Box>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 0.5, mb: 2, pb: 2, borderBottom: '1px solid #E5E7EB' }}>
+                  <Typography component="span" variant="body2">①</Typography>
+                  {(question.repeatable_config as { parts?: { type: string; value?: string; key?: string }[] }).parts?.map((part: { type: string; value?: string; key?: string }, i: number) =>
+                    part.type === 'text' ? (
+                      <Typography key={i} component="span" variant="body2">{part.value || ''}</Typography>
+                    ) : (
+                      <Typography key={i} component="span" variant="body2" sx={{ border: '1px solid #D1D5DB', px: 0.5, borderRadius: 0.5 }}>( )</Typography>
+                    )
+                  )}
+                </Box>
+                <Typography variant="caption" color="text.secondary">+ 추가 버튼으로 행 추가</Typography>
+              </Box>
+            ) : (
+              <Box sx={{ p: 2, border: '1px dashed #D1D5DB', borderRadius: 2, backgroundColor: '#F9FAFB', color: '#9CA3AF' }}>
+                반복 입력 (형식 설정 필요)
+              </Box>
+            )}
+          </Box>
+        )}
       </Paper>
     );
   };
@@ -659,37 +709,22 @@ export default function EditablePreview({
             {/* 로고 이미지 영역 */}
             <Box sx={{ position: 'relative' }}>
               {survey.logo_url ? (
-                <Box sx={{ position: 'relative' }}>
-                  <Box
-                    component="img"
-                    src={survey.logo_url}
-                    alt="로고"
-                    sx={{
-                      width: logoSize.width,
-                      height: logoSize.height,
-                      objectFit: 'contain',
-                      borderRadius: 1,
-                      cursor: 'pointer',
-                    }}
-                    onClick={() => logoInputRef.current?.click()}
-                  />
-                  <IconButton
-                    size="small"
-                    onClick={handleLogoDelete}
-                    sx={{
-                      position: 'absolute',
-                      top: -8,
-                      right: -8,
-                      backgroundColor: '#EF4444',
-                      color: 'white',
-                      width: 20,
-                      height: 20,
-                      '&:hover': { backgroundColor: '#DC2626' },
-                    }}
-                  >
-                    <Close sx={{ fontSize: 14 }} />
-                  </IconButton>
-                </Box>
+                <ResizableImage
+                  src={survey.logo_url}
+                  width={survey.logo_width || logoSize.width}
+                  height={survey.logo_height || logoSize.height}
+                  onSizeChange={(newWidth, newHeight) => {
+                    handleSurveyChange('logo_width', newWidth);
+                    handleSurveyChange('logo_height', newHeight);
+                  }}
+                  onDelete={handleLogoDelete}
+                  onImageClick={() => logoInputRef.current?.click()}
+                  minWidth={24}
+                  minHeight={24}
+                  maxWidth={500}
+                  maxHeight={500}
+                  maintainAspectRatio={false}
+                />
               ) : (
                 <Box
                   onClick={() => logoInputRef.current?.click()}
@@ -780,34 +815,193 @@ export default function EditablePreview({
           />
         </Box>
 
-        {/* 첫 페이지 (소개 콘텐츠) 편집 */}
+        {/* 설문지 첫 페이지 (설명·질문보다 먼저 편집 가능) */}
         <Box sx={{ mb: 4 }}>
+          <Typography variant="h6" sx={{ mb: 2, fontWeight: 600, color: '#1F2937' }}>
+            설문지 첫 페이지
+          </Typography>
           <Paper
             elevation={0}
+            onClick={() => setSelectedElement('first-page')}
             sx={{
               p: 3,
+              mb: 2,
               borderRadius: 2,
-              border: '2px dashed #D1D5DB',
-              backgroundColor: '#FAFAFA',
+              border: selectedElement === 'first-page' ? '2px solid #3B82F6' : '2px dashed #D1D5DB',
+              backgroundColor: selectedElement === 'first-page' ? '#F0F7FF' : '#FAFAFA',
               '&:hover': {
                 borderColor: '#3B82F6',
                 backgroundColor: '#F0F7FF',
               },
             }}
           >
-            <Typography variant="h6" sx={{ mb: 2, fontWeight: 600, color: '#1F2937' }}>
-              설문 시작 페이지 콘텐츠
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
+              응답자가 설문을 시작할 때 가장 먼저 보는 한 페이지입니다. 텍스트 블록과 표 블록을 추가해 구성하세요. 표는 셀 색, 굵게, 글자색, 행/열 추가·삭제로 직접 편집할 수 있습니다.
+            </Typography>
+            <FirstPageEditor
+              value={survey.first_page_content || ''}
+              onChange={(value) => handleSurveyChange('first_page_content', value)}
+              placeholder="설문 시작 시 표시할 내용. {{survey_title}} 로 설문 제목 삽입."
+            />
+            {(survey.first_page_content ?? '').trim() !== '' && (
+              <Box sx={{ mt: 3, pt: 2, borderTop: '1px solid #E5E7EB' }}>
+                <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
+                  첫 페이지 미리보기 (실제 설문에서 보이는 텍스트·이미지·표)
+                </Typography>
+                <Paper variant="outlined" sx={{ p: 2, backgroundColor: '#FAFAFA', borderRadius: 2 }}>
+                  <FirstPageRenderer content={survey.first_page_content} />
+                </Paper>
+              </Box>
+            )}
+          </Paper>
+        </Box>
+
+        {/* 설명 페이지 목록 */}
+        <Box sx={{ mb: 4 }}>
+          <Typography variant="h6" sx={{ mb: 2, fontWeight: 600, color: '#1F2937' }}>
+            설명 페이지 (Desc1, Desc2, ...)
+          </Typography>
+          
+          {(survey.description_pages || []).map((page, index) => (
+            <Paper
+              key={index}
+              elevation={0}
+              sx={{
+                mb: 2,
+                borderRadius: 2,
+                border: selectedElement === `desc-${index}` ? '2px solid #3B82F6' : '2px dashed #D1D5DB',
+                backgroundColor: selectedElement === `desc-${index}` ? '#F0F7FF' : '#FAFAFA',
+                position: 'relative',
+                overflow: 'hidden',
+                '&:hover': {
+                  borderColor: '#3B82F6',
+                  backgroundColor: '#F0F7FF',
+                },
+              }}
+            >
+              <Box
+                sx={{
+                  p: 2,
+                  backgroundColor: '#F9FAFB',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 2,
+                  cursor: 'pointer',
+                  borderBottom: expandedDescIndices.has(index) ? '1px solid #E5E7EB' : 'none',
+                }}
+                onClick={() => toggleDescExpanded(index)}
+              >
+                <IconButton size="small">
+                  {expandedDescIndices.has(index) ? <ExpandLess /> : <ExpandMore />}
+                </IconButton>
+                <Typography variant="subtitle2" fontWeight={600}>
+                  {page.index || `Desc${index + 1}`}
+                </Typography>
+                <Box sx={{ flex: 1 }} />
+                <Tooltip title="삭제">
+                  <IconButton
+                    size="small"
+                    color="error"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const newPages = (survey.description_pages || []).filter((_, i) => i !== index);
+                      handleSurveyChange('description_pages', newPages.length > 0 ? newPages : undefined);
+                    }}
+                  >
+                    <Delete fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              </Box>
+              <Collapse in={expandedDescIndices.has(index)}>
+                <Box sx={{ p: 3 }} onClick={() => setSelectedElement(`desc-${index}`)}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+                    <Typography variant="body2" fontWeight={600} sx={{ color: '#6B7280', minWidth: 80 }}>
+                      인덱스:
+                    </Typography>
+                    <EditableText
+                      value={page.index}
+                      onChange={(value) => {
+                        const newPages = [...(survey.description_pages || [])];
+                        newPages[index] = { ...newPages[index], index: value };
+                        handleSurveyChange('description_pages', newPages);
+                      }}
+                      variant="body"
+                      placeholder="Desc1"
+                      onStyleChange={() => {}}
+                    />
+                  </Box>
+                  <MarkdownEditor
+                    value={page.content}
+                    onChange={(value) => {
+                      const newPages = [...(survey.description_pages || [])];
+                      newPages[index] = { ...newPages[index], content: value };
+                      handleSurveyChange('description_pages', newPages);
+                    }}
+                    label=""
+                    placeholder="설명 페이지 내용을 입력하세요. Markdown 형식을 사용할 수 있습니다."
+                    rows={8}
+                  />
+                </Box>
+              </Collapse>
+            </Paper>
+          ))}
+          
+          <Button
+            startIcon={<Add />}
+            onClick={() => {
+              const newPages = survey.description_pages || [];
+              const nextIndex = `Desc${newPages.length + 1}`;
+              handleSurveyChange('description_pages', [...newPages, { index: nextIndex, content: '' }]);
+            }}
+            variant="outlined"
+            fullWidth
+            sx={{
+              borderRadius: 2,
+              borderStyle: 'dashed',
+              py: 1.5,
+              color: '#6B7280',
+              borderColor: '#D1D5DB',
+              '&:hover': {
+                borderColor: '#3B82F6',
+                color: '#3B82F6',
+                backgroundColor: 'transparent',
+              },
+            }}
+          >
+            설명 페이지 추가
+          </Button>
+        </Box>
+
+        {/* 설문 종료 페이지 */}
+        <Box sx={{ mb: 4 }}>
+          <Typography variant="h6" sx={{ mb: 2, fontWeight: 600, color: '#1F2937' }}>
+            설문 종료 페이지
+          </Typography>
+          <Paper
+            elevation={0}
+            onClick={() => setSelectedElement('completion-page')}
+            sx={{
+              p: 3,
+              mb: 2,
+              borderRadius: 2,
+              border: selectedElement === 'completion-page' ? '2px solid #3B82F6' : '2px dashed #D1D5DB',
+              backgroundColor: selectedElement === 'completion-page' ? '#F0F7FF' : '#FAFAFA',
+              '&:hover': {
+                borderColor: '#3B82F6',
+                backgroundColor: '#F0F7FF',
+              },
+            }}
+          >
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
+              응답 제출 후 표시되는 완료 화면입니다. 비우면 기본 메시지 표시. {'{{survey_title}}'} 로 설문 제목 삽입. 이미지는 드래그 앤 드롭으로 추가 가능.
             </Typography>
             <MarkdownEditor
-              value={survey.intro_content || ''}
-              onChange={(value) => handleSurveyChange('intro_content', value)}
+              value={survey.completion_content || ''}
+              onChange={(value) => handleSurveyChange('completion_content', value)}
               label=""
-              placeholder="설문 시작 전에 표시될 안내 문구를 입력하세요. Markdown 형식을 사용할 수 있습니다."
-              rows={10}
+              placeholder="# 설문이 완료되었습니다!&#10;&#10;{{survey_title}} 설문에 참여해주셔서 감사합니다."
+              rows={8}
             />
-            <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-              이 콘텐츠는 설문 시작 전 첫 페이지에 표시됩니다. 비워두면 첫 페이지가 표시되지 않습니다.
-            </Typography>
           </Paper>
         </Box>
 
@@ -851,9 +1045,6 @@ export default function EditablePreview({
               </Box>
 
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Typography variant="h6" fontWeight={600} sx={{ color: '#374151' }}>
-                  {getSectionLetter(sIndex)}.
-                </Typography>
                 <Box sx={{ flex: 1 }}>
                   <EditableText
                     value={section.title}

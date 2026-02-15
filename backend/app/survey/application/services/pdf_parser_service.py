@@ -479,7 +479,7 @@ class PDFParserService:
         4. 순위 선택(ranking)은 "1순위", "2순위" 등으로 여러 선택지를 순서대로 선택하는 문항입니다. 
            - 예: "순서대로 2개까지 말씀해 주세요. (1순위 : ) (2순위 : )" 같은 질문은 ranking 타입으로 설정하세요.
            - ranking 타입인 경우 ranking_config에 max_ranks(최대 순위 개수)와 rank_labels(순위 레이블 배열)를 포함하세요.
-           - 예: {"max_ranks": 2, "rank_labels": ["1순위", "2순위"]}
+           - 예: {{"max_ranks": 2, "rank_labels": ["1순위", "2순위"]}}
            - options 배열에는 선택 가능한 모든 선택지를 포함하세요.
         5. 선택형 문항(single_choice, multiple_choice, dropdown, ranking)은 options 배열을 포함하세요.
         5. **선택지(label)는 원본 PDF에 있는 전체 텍스트를 정확히 그대로 복사하세요.**

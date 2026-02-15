@@ -1,6 +1,12 @@
 import React, { useMemo } from 'react';
 import { Box, Typography, Chip } from '@mui/material';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import remarkBreaks from 'remark-breaks';
+import { remarkPreserveNewlines } from '../../lib/remarkPreserveNewlines';
 import { Question } from '../../api/surveys';
+
+const markdownPlugins = [remarkGfm, remarkBreaks, remarkPreserveNewlines()] as React.ComponentProps<typeof ReactMarkdown>['remarkPlugins'];
 import {
   SingleChoiceQuestion,
   SingleScaleQuestion,
@@ -11,6 +17,7 @@ import {
   DropdownQuestion,
   LikertQuestion,
   RankingQuestion,
+  RepeatableInputsQuestion,
 } from './questions';
 
 interface AnswerData {
@@ -40,6 +47,8 @@ interface QuestionRendererProps {
   allQuestions?: Question[]; // 모든 질문 목록 (변수 치환용)
   allAnswers?: Record<string, AnswerData>; // 모든 응답 (변수 치환용)
   fontSize?: FontSizeConfig; // 글씨 크기 설정
+  /** 콘텐츠 이미지(설명·본문) 크기 배율. 로고는 제외. 기본 1.0 */
+  contentImageSizeMultiplier?: number;
 }
 
 export default function QuestionRenderer({
@@ -51,6 +60,7 @@ export default function QuestionRenderer({
   allQuestions = [],
   allAnswers = {},
   fontSize,
+  contentImageSizeMultiplier = 1,
 }: QuestionRendererProps) {
   
   // 변수 치환 함수: {{question_number}} 또는 {{question_id}}를 실제 응답 값으로 치환
@@ -290,6 +300,17 @@ export default function QuestionRenderer({
           />
         );
       
+      case 'repeatable_inputs':
+        return (
+          <RepeatableInputsQuestion
+            question={question}
+            value={Array.isArray(answer?.answer_value) ? answer.answer_value : undefined}
+            onChange={(value) => onChange({ answer_value: value })}
+            error={error}
+            fontSize={currentFontSize}
+          />
+        );
+      
       default:
         return <Typography color="error" sx={{ fontSize: currentFontSize.body1 }}>지원하지 않는 문항 유형입니다.</Typography>;
     }
@@ -315,13 +336,52 @@ export default function QuestionRenderer({
       </Typography>
       
       {resolvedDescription && (
-        <Typography
-          variant="body1"
-          color="text.secondary"
-          sx={{ mb: 3, lineHeight: 1.6, fontSize: currentFontSize.body1 }}
+        <Box
+          sx={{
+            mb: 3,
+            lineHeight: 1.6,
+            fontSize: currentFontSize.body1,
+            color: 'text.secondary',
+            '& p': { mb: 1 },
+            '& p:last-child': { mb: 0 },
+            '& ul, & ol': { pl: 3, mb: 1 },
+            '& h1, & h2, & h3': { fontSize: 'inherit', fontWeight: 600, mt: 1, mb: 0.5 },
+          }}
         >
-          {resolvedDescription}
-        </Typography>
+          <ReactMarkdown
+            remarkPlugins={markdownPlugins}
+            components={{
+              img: ({ node, ...imgProps }) => (
+                <Box
+                  sx={{
+                    display: 'flex',
+                    justifyContent: 'center',
+                    my: 2,
+                  }}
+                >
+                  <Box
+                    sx={{
+                      display: 'inline-block',
+                      maxWidth: `${100 * contentImageSizeMultiplier}%`,
+                    }}
+                  >
+                    <img
+                      {...imgProps}
+                      style={{
+                        maxWidth: '100%',
+                        height: 'auto',
+                        borderRadius: 8,
+                        display: 'block',
+                      }}
+                    />
+                  </Box>
+                </Box>
+              ),
+            }}
+          >
+            {resolvedDescription}
+          </ReactMarkdown>
+        </Box>
       )}
       
       {renderQuestion()}

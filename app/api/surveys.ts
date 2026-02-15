@@ -41,6 +41,18 @@ export interface RankingConfig {
   rank_labels: string[];
 }
 
+/** 반복 입력 문항: 텍스트와 입력 필드가 번갈아 나오는 한 줄. + 버튼으로 행 추가 */
+export interface RepeatableInputPart {
+  type: 'text' | 'input';
+  value?: string;   // type === 'text' 일 때 표시할 텍스트
+  key?: string;     // type === 'input' 일 때 필드 키 (각 행의 객체 키)
+  placeholder?: string;
+}
+
+export interface RepeatableInputsConfig {
+  parts: RepeatableInputPart[];
+}
+
 export interface QuestionOption {
   id?: string;
   question_id?: string;
@@ -65,6 +77,7 @@ export interface Question {
   conditional_logic?: ConditionalLogic;
   likert_config?: LikertConfig;
   ranking_config?: RankingConfig;
+  repeatable_config?: RepeatableInputsConfig;
   options: QuestionOption[];
   created_at?: string;
   updated_at?: string;
@@ -83,11 +96,17 @@ export interface Section {
   updated_at?: string;
 }
 
+export interface DescriptionPage {
+  index: string;  // Desc1, Desc2, ...
+  content: string;
+}
+
 export interface Survey {
   id?: string;
   title: string;
   description?: string;
   intro_content?: string;
+  description_pages?: DescriptionPage[];
   status: string;
   share_id?: string;
   allow_edit: boolean;
@@ -98,6 +117,10 @@ export interface Survey {
   logo_width?: number;
   logo_height?: number;
   text_position?: 'left' | 'right' | 'top' | 'bottom';
+  /** 설문지 첫 페이지 콘텐츠 (Markdown). 설명 페이지와 별도로 분리 */
+  first_page_content?: string;
+  /** 설문 종료(완료) 페이지 콘텐츠 (Markdown, 이미지 지원). 비어 있으면 기본 완료 메시지 표시 */
+  completion_content?: string;
   sections: Section[];
   response_count: number;
   created_at?: string;
@@ -155,7 +178,12 @@ export async function getSurvey(surveyId: string): Promise<Survey> {
   const response = await fetch(`${API_BASE}/api/v1/surveys/${surveyId}`);
   if (!response.ok) throw new Error('설문 조회 실패');
   
-  return response.json();
+  const data = await response.json();
+  console.log('getSurvey 응답 데이터:', data);
+  console.log('로고 URL:', data.logo_url);
+  console.log('로고 크기:', data.logo_width, data.logo_height);
+  console.log('텍스트 위치:', data.text_position);
+  return data;
 }
 
 export async function getPublicSurvey(shareId: string): Promise<Survey> {
@@ -188,6 +216,7 @@ export async function updateSurvey(surveyId: string, data: {
   title?: string;
   description?: string;
   intro_content?: string;
+  description_pages?: DescriptionPage[];
   allow_edit?: boolean;
   duplicate_prevention?: boolean;
   logo_url?: string | null;
@@ -196,6 +225,8 @@ export async function updateSurvey(surveyId: string, data: {
   logo_width?: number | null;
   logo_height?: number | null;
   text_position?: 'left' | 'right' | 'top' | 'bottom' | null;
+  first_page_content?: string | null;
+  completion_content?: string | null;
 }): Promise<Survey> {
   const response = await fetch(`${API_BASE}/api/v1/surveys/${surveyId}`, {
     method: 'PUT',
@@ -297,6 +328,7 @@ export async function createQuestion(data: {
   conditional_logic?: ConditionalLogic;
   likert_config?: LikertConfig;
   ranking_config?: RankingConfig;
+  repeatable_config?: RepeatableInputsConfig;
   options?: QuestionOption[];
 }): Promise<Question> {
   const response = await fetch(`${API_BASE}/api/v1/surveys/questions`, {
@@ -321,6 +353,7 @@ export async function updateQuestion(questionId: string, data: {
   conditional_logic?: ConditionalLogic | null;
   likert_config?: LikertConfig;
   ranking_config?: RankingConfig | null;
+  repeatable_config?: RepeatableInputsConfig | null;
   options?: QuestionOption[];
 }): Promise<Question> {
   const response = await fetch(`${API_BASE}/api/v1/surveys/questions/${questionId}`, {
@@ -484,6 +517,9 @@ export async function uploadImage(file: File): Promise<string> {
   const formData = new FormData();
   formData.append('file', file);
   
+  console.log('이미지 업로드 시작:', file.name, file.size, file.type);
+  console.log('API_BASE:', API_BASE);
+  
   const response = await fetch(`${API_BASE}/api/v1/surveys/upload-image`, {
     method: 'POST',
     body: formData,
@@ -491,9 +527,15 @@ export async function uploadImage(file: File): Promise<string> {
   
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: '이미지 업로드 실패' }));
+    console.error('이미지 업로드 실패 응답:', error);
     throw new Error(error.detail || '이미지 업로드 실패');
   }
   
   const data = await response.json();
+  console.log('이미지 업로드 성공 응답:', data);
+  if (!data.url) {
+    console.error('응답에 URL이 없음:', data);
+    throw new Error('업로드 응답에 URL이 포함되어 있지 않습니다.');
+  }
   return data.url;
 }

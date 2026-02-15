@@ -16,12 +16,16 @@ import {
   IconButton,
   Tooltip,
 } from '@mui/material';
-import { ArrowBack, ArrowForward, Send, Remove, Add } from '@mui/icons-material';
+import { ArrowBack, ArrowForward, Send, Remove, Add, TextFields, Image } from '@mui/icons-material';
 import { Survey, Question, ResponseItem, startResponse, submitResponse, updateResponseItems } from '../../api/surveys';
 import QuestionRenderer from './QuestionRenderer';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
+import { remarkPreserveNewlines } from '../../lib/remarkPreserveNewlines';
+import FirstPageRenderer from './FirstPageRenderer';
+
+const markdownPlugins = [remarkGfm, remarkBreaks, remarkPreserveNewlines()];
 
 interface Answers {
   [questionId: string]: {
@@ -34,36 +38,46 @@ interface SurveyFormProps {
   survey: Survey;
   onComplete: () => void;
   showNavigation?: boolean;
+  /** 미리보기 모드: true이면 제출 시 API 호출 없이 onComplete만 호출 (실제 완료 페이지 연출용) */
+  isPreview?: boolean;
 }
 
-export default function SurveyForm({ survey, onComplete, showNavigation = false }: SurveyFormProps) {
+export default function SurveyForm({ survey, onComplete, showNavigation = false, isPreview = false }: SurveyFormProps) {
   const [showIntro, setShowIntro] = useState(false); // 첫 페이지(소개) 표시 여부
+  const [currentDescriptionPageIndex, setCurrentDescriptionPageIndex] = useState(0); // 현재 설명 페이지 인덱스
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   
-  // survey.intro_content가 변경되면 showIntro 업데이트
-  useEffect(() => {
-    const hasIntroContent = survey.intro_content && survey.intro_content.trim();
-    setShowIntro(!!hasIntroContent);
-  }, [survey.intro_content]);
-
-  // 로고 크기 계산 (텍스트가 없으면 크게 표시) - useMemo로 최적화
-  const logoSize = useMemo(() => {
-    const hasText = survey.organization_name || survey.organization_subtitle;
+  // 설명 페이지 확인 (intro_content가 있으면 자동으로 Desc1로 변환)
+  const descriptionPages = useMemo(() => {
+    const pages = [...(survey.description_pages || [])];
     
-    if (!hasText && survey.logo_url) {
-      // 텍스트가 없으면 로고를 크게 표시
-      return {
-        width: survey.logo_width || 120,
-        height: survey.logo_height || 120,
-      };
+    // intro_content가 있고 description_pages에 Desc1이 없으면 자동으로 Desc1로 변환
+    if (survey.intro_content && survey.intro_content.trim()) {
+      const hasDesc1 = pages.some(p => p.index === 'Desc1');
+      if (!hasDesc1) {
+        // Desc1을 맨 앞에 추가
+        pages.unshift({ index: 'Desc1', content: survey.intro_content });
+      }
     }
     
-    // 텍스트가 있으면 설정된 크기 또는 기본값
-    return {
-      width: survey.logo_width || 40,
-      height: survey.logo_height || 40,
-    };
-  }, [survey.logo_url, survey.logo_width, survey.logo_height, survey.organization_name, survey.organization_subtitle]);
+    return pages;
+  }, [survey.description_pages, survey.intro_content]);
+  
+  const hasDescriptionPages = descriptionPages.length > 0;
+  const hasFirstPageContent = useMemo(
+    () => (survey.first_page_content ?? '').trim() !== '',
+    [survey.first_page_content]
+  );
+
+  const [showFirstPage, setShowFirstPage] = useState(false);
+  // 설문지 첫 페이지가 있으면 진입 시 첫 페이지부터 표시; 없으면 기존대로 설명 페이지/질문
+  useEffect(() => {
+    setShowFirstPage(!!hasFirstPageContent);
+  }, [survey.id, hasFirstPageContent]);
+  // 설명 페이지가 있으면 showIntro 활성화 (설문지 첫 페이지가 없을 때만, 있으면 첫 페이지 다음에 설명으로 감)
+  useEffect(() => {
+    if (!hasFirstPageContent) setShowIntro(hasDescriptionPages);
+  }, [hasDescriptionPages, hasFirstPageContent]);
 
   // 텍스트 위치에 따른 레이아웃 방향 결정
   const layoutDirection = useMemo(() => {
@@ -88,15 +102,9 @@ export default function SurveyForm({ survey, onComplete, showNavigation = false 
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const pendingSaveRef = useRef<boolean>(false);
   
-  // 글씨 크기 조절 (로컬 스토리지에 저장)
+  // 글씨 크기 조절. 설문지 불러올 때마다 항상 기본(0)으로 시작
   // fontSizeLevel: -5 (최소) ~ +5 (최대), 기본값 0
-  const [fontSizeLevel, setFontSizeLevel] = useState<number>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('survey-font-size-level');
-      return saved ? parseInt(saved, 10) : 0;
-    }
-    return 0;
-  });
+  const [fontSizeLevel, setFontSizeLevel] = useState<number>(0);
   
   // 글씨 크기 단계 범위
   const MIN_FONT_SIZE_LEVEL = -5;
@@ -145,22 +153,67 @@ export default function SurveyForm({ survey, onComplete, showNavigation = false 
   // 글씨 크기 증가
   const handleFontSizeIncrease = () => {
     if (fontSizeLevel < MAX_FONT_SIZE_LEVEL) {
-      const newLevel = fontSizeLevel + 1;
-      setFontSizeLevel(newLevel);
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('survey-font-size-level', newLevel.toString());
-      }
+      setFontSizeLevel(fontSizeLevel + 1);
     }
   };
   
   // 글씨 크기 감소
   const handleFontSizeDecrease = () => {
     if (fontSizeLevel > MIN_FONT_SIZE_LEVEL) {
-      const newLevel = fontSizeLevel - 1;
-      setFontSizeLevel(newLevel);
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('survey-font-size-level', newLevel.toString());
-      }
+      setFontSizeLevel(fontSizeLevel - 1);
+    }
+  };
+
+  // 이미지 크기 레벨. 설문지 불러올 때마다 항상 기본(0)으로 시작
+  const [imageSizeLevel, setImageSizeLevel] = useState<number>(0);
+  
+  // 이미지 크기 단계 범위 (텍스트와 동일)
+  const MIN_IMAGE_SIZE_LEVEL = -5;
+  const MAX_IMAGE_SIZE_LEVEL = 5;
+  
+  // 기본 이미지 크기 배율 (level 0 기준: 1.0 = 100%)
+  const BASE_IMAGE_SIZE = 1.0;
+  const IMAGE_SIZE_STEP = 0.1; // 각 단계마다 10%씩 증가/감소
+  
+  // 현재 단계에 맞는 이미지 크기 배율 계산
+  const calculateImageSize = (baseSize: number): number => {
+    const multiplier = 1 + (imageSizeLevel * IMAGE_SIZE_STEP);
+    const calculatedSize = baseSize * multiplier;
+    // 최소 50%, 최대 200%로 제한
+    const clampedSize = Math.max(0.5, Math.min(2.0, calculatedSize));
+    return clampedSize;
+  };
+  
+  // 현재 이미지 크기 배율
+  const currentImageSizeMultiplier = calculateImageSize(BASE_IMAGE_SIZE);
+  
+  // 로고 크기 (설정값 유지, 콘텐츠 이미지 크기 조절과 무관)
+  const logoSize = useMemo(() => {
+    const hasText = survey.organization_name || survey.organization_subtitle;
+    
+    if (!hasText && survey.logo_url) {
+      return {
+        width: survey.logo_width || 120,
+        height: survey.logo_height || 120,
+      };
+    }
+    return {
+      width: survey.logo_width || 40,
+      height: survey.logo_height || 40,
+    };
+  }, [survey.logo_url, survey.logo_width, survey.logo_height, survey.organization_name, survey.organization_subtitle]);
+  
+  // 이미지 크기 증가
+  const handleImageSizeIncrease = () => {
+    if (imageSizeLevel < MAX_IMAGE_SIZE_LEVEL) {
+      setImageSizeLevel(imageSizeLevel + 1);
+    }
+  };
+  
+  // 이미지 크기 감소
+  const handleImageSizeDecrease = () => {
+    if (imageSizeLevel > MIN_IMAGE_SIZE_LEVEL) {
+      setImageSizeLevel(imageSizeLevel - 1);
     }
   };
   
@@ -304,15 +357,61 @@ export default function SurveyForm({ survey, onComplete, showNavigation = false 
     return sectionIndex >= 0 ? getSectionLetter(sectionIndex) : '';
   }, [currentSection, survey.sections]);
   
-  // 현재 문항 번호
+  // 표시할 문항 번호: 사용자가 직접 입력한 question_number가 있을 때만 사용 (자동 생성 인덱스는 표시하지 않음)
   const currentQuestionNumber = useMemo(() => {
     if (!currentQuestion) return '';
-    return getQuestionNumber(currentQuestion);
+    if (currentQuestion.question_number) return getQuestionNumber(currentQuestion);
+    return '';
   }, [currentQuestion, survey.sections]);
 
   // 특정 질문으로 이동 (네비게이션 바에서 사용)
   const handleQuestionClick = (questionIndex: number) => {
+    setShowFirstPage(false);
     setCurrentQuestionIndex(questionIndex);
+    setShowIntro(false);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+  
+  // 특정 설명 페이지로 이동 (네비게이션 바에서 사용)
+  const handleDescriptionPageClick = (pageIndex: number) => {
+    setShowFirstPage(false);
+    setCurrentDescriptionPageIndex(pageIndex);
+    setShowIntro(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // 설문지 첫 페이지로 이동 (네비게이션 바에서 사용)
+  const handleGoToFirstPage = () => {
+    if (hasFirstPageContent) {
+      setShowFirstPage(true);
+    } else if (hasDescriptionPages) {
+      setShowIntro(true);
+      setCurrentDescriptionPageIndex(0);
+    } else {
+      setShowIntro(false);
+      setCurrentQuestionIndex(0);
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+  
+  // 뒤로 가기
+  const handleBack = () => {
+    if (showIntro && currentDescriptionPageIndex > 0) {
+      setCurrentDescriptionPageIndex(currentDescriptionPageIndex - 1);
+    } else if (showIntro && currentDescriptionPageIndex === 0) {
+      if (hasFirstPageContent) setShowFirstPage(true);
+      else setShowIntro(false);
+    } else if (!showIntro && currentQuestionIndex > 0) {
+      // 질문에서 이전 질문으로
+      setCurrentQuestionIndex(currentQuestionIndex - 1);
+    } else if (!showIntro && currentQuestionIndex === 0) {
+      if (hasDescriptionPages) {
+        setCurrentDescriptionPageIndex(descriptionPages.length - 1);
+        setShowIntro(true);
+      } else if (hasFirstPageContent) {
+        setShowFirstPage(true);
+      }
+    }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -337,13 +436,101 @@ export default function SurveyForm({ survey, onComplete, showNavigation = false 
       >
         <Box sx={{ p: 2, borderBottom: '1px solid #E5E7EB' }}>
           <Typography variant="h6" fontWeight={600} sx={{ color: '#1F2937' }}>
-            질문 목록
+            목차
+          </Typography>
+        </Box>
+        
+        {/* 설문지 첫 페이지 */}
+        <List sx={{ py: 0 }}>
+          <ListItem disablePadding>
+            <ListItemButton
+              onClick={handleGoToFirstPage}
+              selected={(showFirstPage && hasFirstPageContent) || (!hasFirstPageContent && ((showIntro && currentDescriptionPageIndex === 0) || (!showIntro && currentQuestionIndex === 0 && !hasDescriptionPages)))}
+              sx={{
+                py: 1.5,
+                px: 2,
+                '&.Mui-selected': {
+                  backgroundColor: '#EFF6FF',
+                  borderLeft: '3px solid #3B82F6',
+                  '&:hover': { backgroundColor: '#DBEAFE' },
+                },
+                '&:hover': { backgroundColor: '#F9FAFB' },
+              }}
+            >
+              <ListItemText
+                primary={
+                  <Typography variant="body2" fontWeight={500} sx={{ color: '#1F2937' }}>
+                    설문지 첫 페이지
+                  </Typography>
+                }
+              />
+            </ListItemButton>
+          </ListItem>
+        </List>
+        
+        {/* 설명 페이지 목록 */}
+        {hasDescriptionPages && (
+          <>
+            <Box sx={{ px: 2, py: 1.5, borderBottom: '1px solid #E5E7EB' }}>
+              <Typography variant="caption" fontWeight={600} sx={{ color: '#6B7280', textTransform: 'uppercase' }}>
+                설명 페이지
+              </Typography>
+            </Box>
+            <List sx={{ py: 0 }}>
+              {descriptionPages.map((page, index) => {
+                const isActive = showIntro && index === currentDescriptionPageIndex;
+
+                return (
+                  <ListItem key={`desc-${index}`} disablePadding>
+                    <ListItemButton
+                      onClick={() => handleDescriptionPageClick(index)}
+                      selected={isActive}
+                      sx={{
+                        py: 1.5,
+                        px: 2,
+                        '&.Mui-selected': {
+                          backgroundColor: '#EFF6FF',
+                          borderLeft: '3px solid #3B82F6',
+                          '&:hover': {
+                            backgroundColor: '#DBEAFE',
+                          },
+                        },
+                        '&:hover': {
+                          backgroundColor: '#F9FAFB',
+                        },
+                      }}
+                    >
+                      <ListItemText
+                        primary={
+                          <Typography
+                            variant="body2"
+                            fontWeight={isActive ? 600 : 500}
+                            sx={{
+                              color: isActive ? '#3B82F6' : '#1F2937',
+                            }}
+                          >
+                            설명 페이지 {index + 1}
+                          </Typography>
+                        }
+                      />
+                    </ListItemButton>
+                  </ListItem>
+                );
+              })}
+            </List>
+          </>
+        )}
+        
+        {/* 질문 목록 */}
+        <Box sx={{ px: 2, py: 1.5, borderBottom: '1px solid #E5E7EB', borderTop: hasDescriptionPages ? '1px solid #E5E7EB' : 'none' }}>
+          <Typography variant="caption" fontWeight={600} sx={{ color: '#6B7280', textTransform: 'uppercase' }}>
+            질문
           </Typography>
         </Box>
         <List sx={{ py: 1 }}>
           {visibleQuestions.map((question, index) => {
             const questionNumber = getQuestionNumber(question);
-            const isActive = index === currentQuestionIndex;
+            const isActive = !showIntro && index === currentQuestionIndex;
             const hasAnswer = answers[question.id!] && (
               answers[question.id!].answer_value !== undefined || 
               answers[question.id!].answer_text
@@ -413,6 +600,37 @@ export default function SurveyForm({ survey, onComplete, showNavigation = false 
             );
           })}
         </List>
+
+        {/* 설문 마무리 페이지 (미리보기에서 완료 페이지로 이동) */}
+        {isPreview && (
+          <>
+            <Box sx={{ px: 2, py: 1.5, borderTop: '1px solid #E5E7EB' }}>
+              <Typography variant="caption" fontWeight={600} sx={{ color: '#6B7280', textTransform: 'uppercase' }}>
+                마무리
+              </Typography>
+            </Box>
+            <List sx={{ py: 0 }}>
+              <ListItem disablePadding>
+                <ListItemButton
+                  onClick={onComplete}
+                  sx={{
+                    py: 1.5,
+                    px: 2,
+                    '&:hover': { backgroundColor: '#F9FAFB' },
+                  }}
+                >
+                  <ListItemText
+                    primary={
+                      <Typography variant="body2" fontWeight={500} sx={{ color: '#1F2937' }}>
+                        설문 마무리 페이지
+                      </Typography>
+                    }
+                  />
+                </ListItemButton>
+              </ListItem>
+            </List>
+          </>
+        )}
       </Paper>
     );
   };
@@ -515,6 +733,13 @@ export default function SurveyForm({ survey, onComplete, showNavigation = false 
         newErrors[q.id!] = '필수 항목입니다.';
       } else if (Array.isArray(answer.answer_value) && answer.answer_value.length === 0) {
         newErrors[q.id!] = '최소 하나 이상 선택해주세요.';
+      } else if (q.type === 'repeatable_inputs' && Array.isArray(answer?.answer_value)) {
+        const hasAnyFilled = answer.answer_value.some(
+          (row: Record<string, string>) => row && Object.values(row).some(v => v != null && String(v).trim() !== '')
+        );
+        if (!hasAnyFilled) {
+          newErrors[q.id!] = '최소 한 행 이상 입력해주세요.';
+        }
       }
     }
     
@@ -582,6 +807,11 @@ export default function SurveyForm({ survey, onComplete, showNavigation = false 
     if (currentQuestionIndex > 0) {
       setCurrentQuestionIndex(prev => prev - 1);
       window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else if (currentQuestionIndex === 0 && hasDescriptionPages) {
+      // 첫 질문에서 뒤로 가면 마지막 설명 페이지로
+      setCurrentDescriptionPageIndex(descriptionPages.length - 1);
+      setShowIntro(true);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
   
@@ -606,18 +836,23 @@ export default function SurveyForm({ survey, onComplete, showNavigation = false 
     setSubmitError(null);
     
     try {
-      const items: ResponseItem[] = Object.entries(answers).map(([questionId, data]) => ({
-        question_id: questionId,
-        answer_value: data.answer_value,
-        answer_text: data.answer_text,
-      }));
-      
-      await submitResponse(responseId, {
-        items,
-        user_info: survey.duplicate_prevention ? userInfo : undefined,
-      });
-      
-      onComplete();
+      if (isPreview) {
+        // 미리보기: API 제출 없이 완료 콜백만 호출 → 실제 배포 시의 마지막 페이지(완료 화면) 연출
+        onComplete();
+      } else {
+        const items: ResponseItem[] = Object.entries(answers).map(([questionId, data]) => ({
+          question_id: questionId,
+          answer_value: data.answer_value,
+          answer_text: data.answer_text,
+        }));
+        
+        await submitResponse(responseId, {
+          items,
+          user_info: survey.duplicate_prevention ? userInfo : undefined,
+        });
+        
+        onComplete();
+      }
     } catch (e: any) {
       setSubmitError(e.message || '응답 제출에 실패했습니다.');
     } finally {
@@ -652,9 +887,72 @@ export default function SurveyForm({ survey, onComplete, showNavigation = false 
     );
   }
   
-  // 첫 페이지(소개) 표시
-  const hasIntroContent = survey.intro_content && survey.intro_content.trim();
-  if (showIntro && hasIntroContent) {
+  // 설문지 첫 페이지 (first_page_content) 표시
+  if (showFirstPage && hasFirstPageContent) {
+    return (
+      <Box sx={{ minHeight: '100vh', backgroundColor: '#F8FAFC', display: 'flex' }}>
+        {renderNavigationBar()}
+        <Box sx={{ flex: 1, marginLeft: showNavigation ? '280px' : 0 }}>
+          <Container maxWidth="md" sx={{ py: 4 }}>
+            {/* 헤더 - 로고와 크기 조절 (설명 페이지와 동일) */}
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
+              <Box sx={{ display: 'flex', flexDirection: layoutDirection, alignItems: textAlignment, gap: 1 }}>
+                {survey.logo_url ? (
+                  <Box component="img" src={survey.logo_url} alt="로고" sx={{ width: logoSize.width, height: logoSize.height, objectFit: 'contain' }} />
+                ) : (
+                  <Box sx={{ width: logoSize.width, height: logoSize.height, borderRadius: '50%', background: 'linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 700, fontSize: '1.25rem' }}>S</Box>
+                )}
+                {(survey.organization_name || survey.organization_subtitle) && (
+                  <Box>
+                    {survey.organization_subtitle && <Typography variant="caption" sx={{ color: '#6B7280', display: 'block', lineHeight: 1.2, fontSize: currentFontSize.caption }}>{survey.organization_subtitle}</Typography>}
+                    {survey.organization_name && <Typography variant="h6" sx={{ color: '#3B82F6', fontWeight: 700, lineHeight: 1.2, fontSize: currentFontSize.h6 }}>{survey.organization_name}</Typography>}
+                  </Box>
+                )}
+              </Box>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, border: '1px solid #E5E7EB', borderRadius: 2, p: 0.5 }}>
+                  <TextFields sx={{ fontSize: 16, color: '#6B7280', mr: 0.5 }} />
+                  <Tooltip title="글씨 크기 줄이기"><IconButton size="small" onClick={handleFontSizeDecrease} disabled={fontSizeLevel <= MIN_FONT_SIZE_LEVEL} sx={{ color: fontSizeLevel <= MIN_FONT_SIZE_LEVEL ? '#D1D5DB' : '#6B7280', '&:hover': { backgroundColor: fontSizeLevel <= MIN_FONT_SIZE_LEVEL ? 'transparent' : '#F3F4F6' }, '&.Mui-disabled': { color: '#D1D5DB' } }}><Remove fontSize="small" /></IconButton></Tooltip>
+                  <Tooltip title="글씨 크기 늘리기"><IconButton size="small" onClick={handleFontSizeIncrease} disabled={fontSizeLevel >= MAX_FONT_SIZE_LEVEL} sx={{ color: fontSizeLevel >= MAX_FONT_SIZE_LEVEL ? '#D1D5DB' : '#6B7280', '&:hover': { backgroundColor: fontSizeLevel >= MAX_FONT_SIZE_LEVEL ? 'transparent' : '#F3F4F6' }, '&.Mui-disabled': { color: '#D1D5DB' } }}><Add fontSize="small" /></IconButton></Tooltip>
+                  <Tooltip title="기본 크기로 되돌리기">
+                  <Typography variant="caption" onClick={() => setFontSizeLevel(0)} sx={{ ml: 0.5, color: fontSizeLevel === 0 ? '#3B82F6' : '#9CA3AF', fontWeight: fontSizeLevel === 0 ? 600 : 400, cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}>기본</Typography>
+                </Tooltip>
+                </Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, border: '1px solid #E5E7EB', borderRadius: 2, p: 0.5 }}>
+                  <Image sx={{ fontSize: 16, color: '#6B7280', mr: 0.5 }} />
+                  <Tooltip title="콘텐츠 이미지 크기 줄이기 (설명·본문 이미지)"><IconButton size="small" onClick={handleImageSizeDecrease} disabled={imageSizeLevel <= MIN_IMAGE_SIZE_LEVEL} sx={{ color: imageSizeLevel <= MIN_IMAGE_SIZE_LEVEL ? '#D1D5DB' : '#6B7280', '&:hover': { backgroundColor: imageSizeLevel <= MIN_IMAGE_SIZE_LEVEL ? 'transparent' : '#F3F4F6' }, '&.Mui-disabled': { color: '#D1D5DB' } }}><Remove fontSize="small" /></IconButton></Tooltip>
+                  <Tooltip title="콘텐츠 이미지 크기 늘리기 (설명·본문 이미지)"><IconButton size="small" onClick={handleImageSizeIncrease} disabled={imageSizeLevel >= MAX_IMAGE_SIZE_LEVEL} sx={{ color: imageSizeLevel >= MAX_IMAGE_SIZE_LEVEL ? '#D1D5DB' : '#6B7280', '&:hover': { backgroundColor: imageSizeLevel >= MAX_IMAGE_SIZE_LEVEL ? 'transparent' : '#F3F4F6' }, '&.Mui-disabled': { color: '#D1D5DB' } }}><Add fontSize="small" /></IconButton></Tooltip>
+                  <Tooltip title="기본 크기로 되돌리기">
+                  <Typography variant="caption" onClick={() => setImageSizeLevel(0)} sx={{ ml: 0.5, color: imageSizeLevel === 0 ? '#3B82F6' : '#9CA3AF', fontWeight: imageSizeLevel === 0 ? 600 : 400, cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}>기본</Typography>
+                </Tooltip>
+                </Box>
+              </Box>
+            </Box>
+            <Typography variant="h4" sx={{ fontWeight: 700, textAlign: 'center', mb: 2, color: '#1F2937', fontSize: currentFontSize.h4 }}>{survey.title || '설문'}</Typography>
+            <Paper elevation={0} sx={{ p: 4, mb: 3, borderRadius: 2, border: '1px solid #E5E7EB', backgroundColor: 'white' }}>
+              <FirstPageRenderer
+                content={survey.first_page_content}
+                fontSizeBody={currentFontSize.body1}
+                fontSizeH1={currentFontSize.h1}
+                fontSizeH2={currentFontSize.h2}
+                fontSizeH3={currentFontSize.h3}
+                imageSizeMultiplier={currentImageSizeMultiplier}
+              />
+            </Paper>
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 4 }}>
+              <Button variant="contained" size="large" onClick={() => { setShowFirstPage(false); if (hasDescriptionPages) { setShowIntro(true); setCurrentDescriptionPageIndex(0); } else { setShowIntro(false); setCurrentQuestionIndex(0); } window.scrollTo({ top: 0, behavior: 'smooth' }); }} sx={{ borderRadius: 2, px: 4, py: 1.5, fontSize: currentFontSize.body1, fontWeight: 600, backgroundColor: '#3B82F6', '&:hover': { backgroundColor: '#2563EB' } }}>
+                다음
+              </Button>
+            </Box>
+          </Container>
+        </Box>
+      </Box>
+    );
+  }
+
+  // 첫 페이지(소개) 표시 - 설명 페이지들 표시
+  if (showIntro && hasDescriptionPages && currentDescriptionPageIndex < descriptionPages.length) {
+    const currentPage = descriptionPages[currentDescriptionPageIndex];
     return (
       <Box sx={{ minHeight: '100vh', backgroundColor: '#F8FAFC', display: 'flex' }}>
         {renderNavigationBar()}
@@ -716,10 +1014,11 @@ export default function SurveyForm({ survey, onComplete, showNavigation = false 
               )}
             </Box>
             
-            {/* 진행바와 글씨 크기 조절 */}
+            {/* 진행바와 크기 조절 */}
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               {/* 글씨 크기 조절 버튼 */}
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, border: '1px solid #E5E7EB', borderRadius: 2, p: 0.5 }}>
+                <TextFields sx={{ fontSize: 16, color: '#6B7280', mr: 0.5 }} />
                 <Tooltip title="글씨 크기 줄이기">
                   <IconButton
                     size="small"
@@ -756,6 +1055,53 @@ export default function SurveyForm({ survey, onComplete, showNavigation = false 
                     <Add fontSize="small" />
                   </IconButton>
                 </Tooltip>
+                <Tooltip title="기본 크기로 되돌리기">
+                  <Typography variant="caption" onClick={() => setFontSizeLevel(0)} sx={{ ml: 0.5, color: fontSizeLevel === 0 ? '#3B82F6' : '#9CA3AF', fontWeight: fontSizeLevel === 0 ? 600 : 400, cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}>기본</Typography>
+                </Tooltip>
+              </Box>
+              
+              {/* 이미지 크기 조절 버튼 */}
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, border: '1px solid #E5E7EB', borderRadius: 2, p: 0.5 }}>
+                <Image sx={{ fontSize: 16, color: '#6B7280', mr: 0.5 }} />
+                <Tooltip title="콘텐츠 이미지 크기 줄이기 (설명·본문 이미지)">
+                  <IconButton
+                    size="small"
+                    onClick={handleImageSizeDecrease}
+                    disabled={imageSizeLevel <= MIN_IMAGE_SIZE_LEVEL}
+                    sx={{
+                      color: imageSizeLevel <= MIN_IMAGE_SIZE_LEVEL ? '#D1D5DB' : '#6B7280',
+                      '&:hover': {
+                        backgroundColor: imageSizeLevel <= MIN_IMAGE_SIZE_LEVEL ? 'transparent' : '#F3F4F6',
+                      },
+                      '&.Mui-disabled': {
+                        color: '#D1D5DB',
+                      },
+                    }}
+                  >
+                    <Remove fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="콘텐츠 이미지 크기 늘리기 (설명·본문 이미지)">
+                  <IconButton
+                    size="small"
+                    onClick={handleImageSizeIncrease}
+                    disabled={imageSizeLevel >= MAX_IMAGE_SIZE_LEVEL}
+                    sx={{
+                      color: imageSizeLevel >= MAX_IMAGE_SIZE_LEVEL ? '#D1D5DB' : '#6B7280',
+                      '&:hover': {
+                        backgroundColor: imageSizeLevel >= MAX_IMAGE_SIZE_LEVEL ? 'transparent' : '#F3F4F6',
+                      },
+                      '&.Mui-disabled': {
+                        color: '#D1D5DB',
+                      },
+                    }}
+                  >
+                    <Add fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="기본 크기로 되돌리기">
+                  <Typography variant="caption" onClick={() => setImageSizeLevel(0)} sx={{ ml: 0.5, color: imageSizeLevel === 0 ? '#3B82F6' : '#9CA3AF', fontWeight: imageSizeLevel === 0 ? 600 : 400, cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}>기본</Typography>
+                </Tooltip>
               </Box>
               
               {/* 진행바 */}
@@ -771,7 +1117,7 @@ export default function SurveyForm({ survey, onComplete, showNavigation = false 
                   <Box
                     sx={{
                       height: '100%',
-                      width: '5%',
+                      width: `${((currentDescriptionPageIndex + 1) / descriptionPages.length) * 100}%`,
                       backgroundColor: '#3B82F6',
                       borderRadius: 3,
                     }}
@@ -787,7 +1133,7 @@ export default function SurveyForm({ survey, onComplete, showNavigation = false 
             sx={{
               fontWeight: 700,
               textAlign: 'center',
-              mb: 4,
+              mb: 2,
               color: '#1F2937',
               fontSize: currentFontSize.h4,
             }}
@@ -795,7 +1141,7 @@ export default function SurveyForm({ survey, onComplete, showNavigation = false 
             {survey.title || '설문'}
           </Typography>
           
-          {/* 소개 콘텐츠 */}
+          {/* 설명 페이지 콘텐츠 */}
           <Paper
             elevation={0}
             sx={{
@@ -804,12 +1150,6 @@ export default function SurveyForm({ survey, onComplete, showNavigation = false 
               borderRadius: 2,
               border: '1px solid #E5E7EB',
               backgroundColor: 'white',
-              '& img': {
-                maxWidth: '100%',
-                height: 'auto',
-                borderRadius: 2,
-                mb: 2,
-              },
               '& p': {
                 mb: 2,
                 lineHeight: 1.8,
@@ -846,17 +1186,92 @@ export default function SurveyForm({ survey, onComplete, showNavigation = false 
               },
             }}
           >
-            <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
-              {survey.intro_content || ''}
+            <ReactMarkdown 
+              remarkPlugins={markdownPlugins}
+              components={{
+                img: ({ node, ...props }) => {
+                  return (
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        my: 2,
+                      }}
+                    >
+                      <Paper
+                        elevation={0}
+                        sx={{
+                          display: 'inline-block',
+                          p: 2,
+                          backgroundColor: 'white',
+                          borderRadius: 2,
+                          border: '1px solid #E5E7EB',
+                          maxWidth: `${100 * currentImageSizeMultiplier}%`,
+                        }}
+                      >
+                        <Box
+                          component="img"
+                          {...props}
+                          sx={{
+                            maxWidth: '100%',
+                            width: 'auto',
+                            height: 'auto',
+                            borderRadius: 1,
+                            display: 'block',
+                          }}
+                        />
+                      </Paper>
+                    </Box>
+                  );
+                },
+              }}
+            >
+              {currentPage.content}
             </ReactMarkdown>
           </Paper>
           
-          {/* 다음 버튼 */}
-          <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 4 }}>
+          {/* 뒤로 가기 / 다음 버튼 */}
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 4 }}>
+            <Button
+              variant="outlined"
+              size="large"
+              startIcon={<ArrowBack />}
+              onClick={handleBack}
+              disabled={currentDescriptionPageIndex === 0 && !hasDescriptionPages}
+              sx={{
+                borderRadius: 2,
+                px: 4,
+                py: 1.5,
+                fontSize: currentFontSize.body1,
+                fontWeight: 600,
+                borderColor: '#D1D5DB',
+                color: '#6B7280',
+                '&:hover': {
+                  borderColor: '#9CA3AF',
+                  backgroundColor: '#F9FAFB',
+                },
+                '&.Mui-disabled': {
+                  borderColor: '#E5E7EB',
+                  color: '#D1D5DB',
+                },
+              }}
+            >
+              뒤로
+            </Button>
             <Button
               variant="contained"
               size="large"
-              onClick={() => setShowIntro(false)}
+              onClick={() => {
+                if (currentDescriptionPageIndex < descriptionPages.length - 1) {
+                  // 다음 설명 페이지로
+                  setCurrentDescriptionPageIndex(currentDescriptionPageIndex + 1);
+                } else {
+                  // 질문으로
+                  setShowIntro(false);
+                }
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
               sx={{
                 borderRadius: 2,
                 px: 4,
@@ -946,10 +1361,11 @@ export default function SurveyForm({ survey, onComplete, showNavigation = false 
             )}
           </Box>
           
-          {/* 진행바와 글씨 크기 조절 */}
+          {/* 진행바와 크기 조절 */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             {/* 글씨 크기 조절 버튼 */}
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, border: '1px solid #E5E7EB', borderRadius: 2, p: 0.5 }}>
+              <TextFields sx={{ fontSize: 16, color: '#6B7280', mr: 0.5 }} />
               <Tooltip title="글씨 크기 줄이기">
                 <IconButton
                   size="small"
@@ -985,6 +1401,53 @@ export default function SurveyForm({ survey, onComplete, showNavigation = false 
                 >
                   <Add fontSize="small" />
                 </IconButton>
+              </Tooltip>
+              <Tooltip title="기본 크기로 되돌리기">
+                <Typography variant="caption" onClick={() => setFontSizeLevel(0)} sx={{ ml: 0.5, color: fontSizeLevel === 0 ? '#3B82F6' : '#9CA3AF', fontWeight: fontSizeLevel === 0 ? 600 : 400, cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}>기본</Typography>
+              </Tooltip>
+            </Box>
+            
+            {/* 이미지 크기 조절 버튼 */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, border: '1px solid #E5E7EB', borderRadius: 2, p: 0.5 }}>
+              <Image sx={{ fontSize: 16, color: '#6B7280', mr: 0.5 }} />
+              <Tooltip title="콘텐츠 이미지 크기 줄이기 (설명·본문 이미지)">
+                <IconButton
+                  size="small"
+                  onClick={handleImageSizeDecrease}
+                  disabled={imageSizeLevel <= MIN_IMAGE_SIZE_LEVEL}
+                  sx={{
+                    color: imageSizeLevel <= MIN_IMAGE_SIZE_LEVEL ? '#D1D5DB' : '#6B7280',
+                    '&:hover': {
+                      backgroundColor: imageSizeLevel <= MIN_IMAGE_SIZE_LEVEL ? 'transparent' : '#F3F4F6',
+                    },
+                    '&.Mui-disabled': {
+                      color: '#D1D5DB',
+                    },
+                  }}
+                >
+                  <Remove fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="콘텐츠 이미지 크기 늘리기 (설명·본문 이미지)">
+                <IconButton
+                  size="small"
+                  onClick={handleImageSizeIncrease}
+                  disabled={imageSizeLevel >= MAX_IMAGE_SIZE_LEVEL}
+                  sx={{
+                    color: imageSizeLevel >= MAX_IMAGE_SIZE_LEVEL ? '#D1D5DB' : '#6B7280',
+                    '&:hover': {
+                      backgroundColor: imageSizeLevel >= MAX_IMAGE_SIZE_LEVEL ? 'transparent' : '#F3F4F6',
+                    },
+                    '&.Mui-disabled': {
+                      color: '#D1D5DB',
+                    },
+                  }}
+                >
+                  <Add fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="기본 크기로 되돌리기">
+                <Typography variant="caption" onClick={() => setImageSizeLevel(0)} sx={{ ml: 0.5, color: imageSizeLevel === 0 ? '#3B82F6' : '#9CA3AF', fontWeight: imageSizeLevel === 0 ? 600 : 400, cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}>기본</Typography>
               </Tooltip>
             </Box>
             
@@ -1023,7 +1486,7 @@ export default function SurveyForm({ survey, onComplete, showNavigation = false 
             }}
           >
             <Typography variant="h6" fontWeight={600} sx={{ color: '#1F2937', fontSize: currentFontSize.h6 }}>
-              {currentSectionLetter && `${currentSectionLetter}. `}{currentSection.title}
+              {currentSection.title}
             </Typography>
           </Box>
         )}
@@ -1041,6 +1504,7 @@ export default function SurveyForm({ survey, onComplete, showNavigation = false 
               allQuestions={allQuestions}
               allAnswers={answers}
               fontSize={currentFontSize}
+              contentImageSizeMultiplier={currentImageSizeMultiplier}
             />
           </>
         )}
@@ -1081,10 +1545,37 @@ export default function SurveyForm({ survey, onComplete, showNavigation = false 
         )}
         
         {/* 네비게이션 버튼 */}
-        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 4, mb: 4 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 4, mb: 4 }}>
+          <Button
+            variant="outlined"
+            size="large"
+            startIcon={<ArrowBack />}
+            onClick={handlePrev}
+            disabled={currentQuestionIndex === 0 && !hasDescriptionPages}
+            sx={{
+              borderRadius: 2,
+              px: 4,
+              py: 1.5,
+              fontSize: currentFontSize.body1,
+              fontWeight: 600,
+              borderColor: '#D1D5DB',
+              color: '#6B7280',
+              '&:hover': {
+                borderColor: '#9CA3AF',
+                backgroundColor: '#F9FAFB',
+              },
+              '&.Mui-disabled': {
+                borderColor: '#E5E7EB',
+                color: '#D1D5DB',
+              },
+            }}
+          >
+            뒤로
+          </Button>
           {isLastQuestion ? (
             <Button
               variant="contained"
+              size="large"
               endIcon={submitting ? <CircularProgress size={20} color="inherit" /> : <Send />}
               onClick={handleSubmit}
               disabled={submitting}
@@ -1092,7 +1583,7 @@ export default function SurveyForm({ survey, onComplete, showNavigation = false 
                 borderRadius: 2,
                 px: 4,
                 py: 1.5,
-                fontSize: '1rem',
+                fontSize: currentFontSize.body1,
                 fontWeight: 600,
                 backgroundColor: '#3B82F6',
                 '&:hover': {
@@ -1105,12 +1596,13 @@ export default function SurveyForm({ survey, onComplete, showNavigation = false 
           ) : (
             <Button
               variant="contained"
+              size="large"
               onClick={handleNext}
               sx={{
                 borderRadius: 2,
                 px: 4,
                 py: 1.5,
-                fontSize: '1rem',
+                fontSize: currentFontSize.body1,
                 fontWeight: 600,
                 backgroundColor: '#3B82F6',
                 '&:hover': {

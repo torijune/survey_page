@@ -27,10 +27,16 @@ class SurveyService:
     
     async def create_survey(self, request: SurveyCreateRequest) -> Survey:
         """설문 생성"""
+        # description_pages를 딕셔너리 리스트로 변환
+        description_pages = None
+        if request.description_pages:
+            description_pages = [{"index": page.index, "content": page.content} for page in request.description_pages]
+        
         survey = Survey(
             title=request.title,
             description=request.description,
             intro_content=request.intro_content,
+            description_pages=description_pages,
             allow_edit=request.allow_edit,
             duplicate_prevention=request.duplicate_prevention,
         )
@@ -72,10 +78,29 @@ class SurveyService:
             existing.description = request.description
         if request.intro_content is not None:
             existing.intro_content = request.intro_content
+        if request.description_pages is not None:
+            existing.description_pages = [{"index": page.index, "content": page.content} for page in request.description_pages]
         if request.allow_edit is not None:
             existing.allow_edit = request.allow_edit
         if request.duplicate_prevention is not None:
             existing.duplicate_prevention = request.duplicate_prevention
+        # 로고 관련 필드 업데이트
+        if request.logo_url is not None:
+            existing.logo_url = request.logo_url
+        if request.organization_name is not None:
+            existing.organization_name = request.organization_name
+        if request.organization_subtitle is not None:
+            existing.organization_subtitle = request.organization_subtitle
+        if request.logo_width is not None:
+            existing.logo_width = request.logo_width
+        if request.logo_height is not None:
+            existing.logo_height = request.logo_height
+        if request.text_position is not None:
+            existing.text_position = request.text_position
+        if request.first_page_content is not None:
+            existing.first_page_content = request.first_page_content
+        if request.completion_content is not None:
+            existing.completion_content = request.completion_content
         
         return await self.survey_repository.update_survey(existing)
     
@@ -152,6 +177,7 @@ class SurveyService:
             conditional_logic=self._map_conditional_logic(request.conditional_logic),
             likert_config=self._map_likert_config(request.likert_config),
             ranking_config=self._map_ranking_config(request.ranking_config),
+            repeatable_config=request.repeatable_config,
         )
         
         created_question = await self.survey_repository.create_question(question)
@@ -198,6 +224,8 @@ class SurveyService:
             existing.likert_config = self._map_likert_config(request.likert_config)
         if request.ranking_config is not None:
             existing.ranking_config = self._map_ranking_config(request.ranking_config)
+        if request.repeatable_config is not None:
+            existing.repeatable_config = request.repeatable_config
         
         updated_question = await self.survey_repository.update_question(existing)
         

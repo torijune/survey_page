@@ -23,11 +23,26 @@ def handler(event, context):
     trailing slash를 제거하지만, rawPath는 원본을 유지함.
     두 값을 통일하여 FastAPI 라우팅이 정상 동작하도록 보장.
     """
+    # 디버깅: 요청 정보 로깅
+    raw_path = event.get("rawPath", "N/A")
+    http_method = event.get("requestContext", {}).get("http", {}).get("method", "N/A")
+    print(f"[HANDLER] 요청: {http_method} {raw_path}")
+    print(f"[HANDLER] 등록된 라우트 수: {len(app.routes)}")
+    
     # rawPath와 requestContext.http.path 통일
     if "rawPath" in event:
         raw = event["rawPath"]
         rc = event.get("requestContext", {}).get("http", {})
         if rc.get("path") != raw:
             event["requestContext"]["http"]["path"] = raw
+        print(f"[HANDLER] 경로 통일: {raw} -> {event['requestContext']['http']['path']}")
     
-    return mangum_handler(event, context)
+    try:
+        result = mangum_handler(event, context)
+        print(f"[HANDLER] 응답 상태: {result.get('statusCode', 'N/A')}")
+        return result
+    except Exception as e:
+        print(f"[HANDLER] 오류 발생: {e}")
+        import traceback
+        traceback.print_exc()
+        raise

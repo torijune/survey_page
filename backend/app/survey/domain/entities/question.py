@@ -16,6 +16,7 @@ class QuestionType(str, Enum):
     DROPDOWN = "dropdown"
     RANKING = "ranking"  # 순위 선택 (1순위, 2순위 등)
     SINGLE_SCALE = "single_scale"  # 단일 척도 (매우 필요, 다소 필요, 보통, 별로 불필요, 전혀 불필요 등)
+    REPEATABLE_INPUTS = "repeatable_inputs"  # 반복 입력 (주소 등, + 버튼으로 행 추가)
 
 
 @dataclass
@@ -180,6 +181,7 @@ class Question:
     conditional_logic: Optional[ConditionalLogic] = None
     likert_config: Optional[LikertConfig] = None
     ranking_config: Optional[RankingConfig] = None
+    repeatable_config: Optional[Dict[str, Any]] = None  # { "parts": [ {"type": "text"|"input", "value"?, "key"?} ] }
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     
@@ -201,6 +203,7 @@ class Question:
             "conditional_logic": self.conditional_logic.to_dict() if self.conditional_logic else None,
             "likert_config": self.likert_config.to_dict() if self.likert_config else None,
             "ranking_config": self.ranking_config.to_dict() if self.ranking_config else None,
+            "repeatable_config": self.repeatable_config,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }

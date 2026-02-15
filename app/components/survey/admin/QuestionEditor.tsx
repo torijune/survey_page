@@ -23,9 +23,12 @@ import {
   RadioGroup,
   FormLabel,
   Checkbox,
+  Collapse,
+  Stack,
 } from '@mui/material';
-import { Add, Delete, DragIndicator, Save, Visibility, VisibilityOff, Autorenew, Code, Settings, Bookmark, BookmarkBorder } from '@mui/icons-material';
-import { Question, QuestionOption, LikertConfig, ValidationRules, RankingConfig, ConditionalLogic } from '../../../api/surveys';
+import { Add, Delete, DragIndicator, Save, Visibility, VisibilityOff, Autorenew, Code, Settings, Bookmark, BookmarkBorder, ExpandMore, ExpandLess } from '@mui/icons-material';
+import { Question, QuestionOption, LikertConfig, ValidationRules, RankingConfig, ConditionalLogic, RepeatableInputPart, RepeatableInputsConfig } from '../../../api/surveys';
+import MarkdownEditor from './MarkdownEditor';
 
 interface QuestionEditorProps {
   question: Question;
@@ -36,6 +39,8 @@ interface QuestionEditorProps {
   isNew?: boolean; // 새로 생성된 문항인지 (아직 DB에 저장 안됨)
   allQuestions?: Question[]; // 모든 질문 목록 (변수 삽입용)
   currentQuestionId?: string; // 현재 질문 ID (자기 자신 제외용)
+  collapsible?: boolean; // 접기/펼치기 지원
+  questionIndex?: number; // 문항 순서 (헤더 표시용)
 }
 
 const QUESTION_TYPES = [
@@ -49,6 +54,7 @@ const QUESTION_TYPES = [
   { value: 'date', label: '날짜' },
   { value: 'likert', label: '리커트 척도' },
   { value: 'ranking', label: '순위 선택' },
+  { value: 'repeatable_inputs', label: '반복 입력 (주소 등)' },
 ];
 
 function QuestionEditor({
@@ -60,10 +66,14 @@ function QuestionEditor({
   isNew = false,
   allQuestions = [],
   currentQuestionId,
+  collapsible = false,
+  questionIndex = 0,
 }: QuestionEditorProps) {
+  const [expanded, setExpanded] = useState(true);
   const hasOptions = ['single_choice', 'single_scale', 'multiple_choice', 'dropdown', 'ranking'].includes(question.type);
   const isLikert = question.type === 'likert';
   const isRanking = question.type === 'ranking';
+  const isRepeatableInputs = question.type === 'repeatable_inputs';
   const isText = ['short_text', 'long_text'].includes(question.type);
   const isNumber = question.type === 'number';
   
@@ -281,6 +291,30 @@ function QuestionEditor({
     handleRankingChange('rank_labels', newLabels);
   };
   
+  // 반복 입력 (주소 등) 설정
+  const repeatableConfig = question.repeatable_config || { parts: [] };
+  const handleRepeatablePartsChange = (parts: RepeatableInputPart[]) => {
+    onChange({ ...question, repeatable_config: { parts } });
+  };
+  const addRepeatablePart = (type: 'text' | 'input') => {
+    const parts = [...(repeatableConfig.parts || [])];
+    if (type === 'text') {
+      parts.push({ type: 'text', value: '' });
+    } else {
+      parts.push({ type: 'input', key: `field_${parts.filter(p => p.type === 'input').length + 1}` });
+    }
+    handleRepeatablePartsChange(parts);
+  };
+  const updateRepeatablePart = (index: number, updates: Partial<RepeatableInputPart>) => {
+    const parts = [...(repeatableConfig.parts || [])];
+    parts[index] = { ...parts[index], ...updates };
+    handleRepeatablePartsChange(parts);
+  };
+  const removeRepeatablePart = (index: number) => {
+    const parts = (repeatableConfig.parts || []).filter((_, i) => i !== index);
+    handleRepeatablePartsChange(parts);
+  };
+  
   // 조건문 설정 관련 함수들
   const openConditionalDialog = () => {
     if (question.conditional_logic) {
@@ -376,22 +410,97 @@ function QuestionEditor({
   
   const conditionOptions = getConditionOptions();
   
+  const typeLabel = QUESTION_TYPES.find(t => t.value === question.type)?.label || question.type;
+  const headerTitle = question.question_number || question.title || `문항 ${questionIndex + 1}`;
+  
   return (
     <Paper
       elevation={0}
       sx={{
-        p: 3,
+        p: collapsible ? 0 : 3,
+        pt: collapsible ? 0 : 3,
         mb: 2,
         borderRadius: 2,
         border: '1px solid #E5E7EB',
         opacity: question.is_hidden ? 0.6 : 1,
         backgroundColor: question.is_hidden ? '#F9FAFB' : 'white',
         position: 'relative',
+        overflow: 'hidden',
         '&:hover': {
           borderColor: 'primary.light',
         },
       }}
     >
+      {collapsible && (
+        <Box
+          onClick={() => setExpanded(!expanded)}
+          sx={{
+            p: 2,
+            backgroundColor: '#F9FAFB',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 2,
+            cursor: 'pointer',
+            borderBottom: expanded ? '1px solid #E5E7EB' : 'none',
+          }}
+        >
+          <IconButton size="small" sx={{ cursor: 'grab' }}>
+            <DragIndicator />
+          </IconButton>
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Typography variant="subtitle2" fontWeight={600} noWrap>
+              {headerTitle || '제목 없음'}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              {typeLabel}
+            </Typography>
+          </Box>
+          <Chip label={typeLabel} size="small" variant="outlined" sx={{ flexShrink: 0 }} />
+          {question.is_hidden && <Chip label="숨김" size="small" color="warning" />}
+          {question.conditional_logic && (
+            <Chip
+              icon={<Settings sx={{ fontSize: 14 }} />}
+              label={`조건: ${availableConditionQuestions.find(q => q.id === question.conditional_logic?.question_id)?.question_number || '?'}`}
+              size="small"
+              color="primary"
+              variant="outlined"
+            />
+          )}
+          {onSave && (
+            <IconButton
+              size="small"
+              onClick={(e) => { e.stopPropagation(); onSave(); }}
+              color="primary"
+              title="저장"
+            >
+              <Save />
+            </IconButton>
+          )}
+          {onToggleHide && (
+            <IconButton
+              size="small"
+              onClick={(e) => { e.stopPropagation(); onToggleHide(); }}
+              title={question.is_hidden ? '표시' : '숨김'}
+            >
+              {question.is_hidden ? <VisibilityOff /> : <Visibility />}
+            </IconButton>
+          )}
+          <IconButton
+            size="small"
+            onClick={(e) => { e.stopPropagation(); onDelete(); }}
+            color="error"
+            title="삭제"
+          >
+            <Delete />
+          </IconButton>
+          <IconButton size="small">
+            {expanded ? <ExpandLess /> : <ExpandMore />}
+          </IconButton>
+        </Box>
+      )}
+      <Collapse in={!collapsible || expanded}>
+        <Box sx={{ p: collapsible ? 3 : 0, pt: collapsible ? 2 : 0, position: 'relative' }}>
+      {!collapsible && (
       <Box sx={{ position: 'absolute', top: 8, right: 8, zIndex: 1, display: 'flex', gap: 1 }}>
         {question.is_hidden && (
           <Chip
@@ -410,6 +519,7 @@ function QuestionEditor({
           />
         )}
       </Box>
+      )}
       <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
         <IconButton size="small" sx={{ cursor: 'grab', mt: 1 }}>
           <DragIndicator />
@@ -479,11 +589,11 @@ function QuestionEditor({
             />
           </Box>
           
-          {/* 문항 설명 */}
+          {/* 문항 설명 (마크다운, 이미지 지원) - 질문과 선택지 사이에 표시 */}
           <Box sx={{ mb: 2 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
               <Typography variant="body2" color="text.secondary">
-                설명 (선택사항)
+                설명 (선택사항, 이미지 추가 가능)
               </Typography>
               {allQuestions.length > 0 && (
                 <FormControl size="small" sx={{ minWidth: 200 }}>
@@ -495,7 +605,6 @@ function QuestionEditor({
                       if (selectedQuestionId) {
                         const selectedQ = allQuestions.find(q => q.id === selectedQuestionId);
                         if (selectedQ && selectedQ.question_number) {
-                          // question_number가 있는 경우만 변수 삽입
                           const varText = `{{${selectedQ.question_number}}}`;
                           handleChange('description', (question.description || '') + varText);
                         }
@@ -520,14 +629,13 @@ function QuestionEditor({
                 </FormControl>
               )}
             </Box>
-            <TextField
-              fullWidth
+            <MarkdownEditor
               value={question.description || ''}
-              onChange={(e) => handleChange('description', e.target.value)}
-              size="small"
-              multiline
-              rows={2}
-              placeholder="설명을 입력하세요 ({{질문번호}} 형식으로 변수 사용 가능, 질문 넘버링이 있는 질문만 사용 가능)"
+              onChange={(value) => handleChange('description', value)}
+              label=""
+              placeholder="설명을 입력하세요. Markdown·이미지(드래그 앤 드롭) 사용 가능. {{질문번호}} 로 변수 삽입."
+              rows={5}
+              showLivePreview={true}
             />
           </Box>
           
@@ -538,7 +646,30 @@ function QuestionEditor({
               <Select
                 value={question.type}
                 label="문항 유형"
-                onChange={(e) => handleChange('type', e.target.value)}
+                onChange={(e) => {
+                  const newType = e.target.value;
+                  if (newType === 'repeatable_inputs' && !(question.repeatable_config?.parts?.length)) {
+                    onChange({
+                      ...question,
+                      type: newType,
+                      repeatable_config: {
+                        parts: [
+                          { type: 'text', value: '광진구 ' },
+                          { type: 'input', key: 'gu' },
+                          { type: 'text', value: ' 동 ' },
+                          { type: 'input', key: 'dong' },
+                          { type: 'text', value: ' - ' },
+                          { type: 'input', key: 'middle' },
+                          { type: 'text', value: ' 번지 ' },
+                          { type: 'input', key: 'bunji' },
+                          { type: 'text', value: ' 호(토지, 건축물)' },
+                        ],
+                      },
+                    });
+                  } else {
+                    handleChange('type', newType);
+                  }
+                }}
               >
                 {QUESTION_TYPES.map((type) => (
                   <MenuItem key={type.value} value={type.value}>
@@ -854,6 +985,70 @@ function QuestionEditor({
                   />
                 </Box>
               ))}
+            </Box>
+          )}
+          
+          {/* 반복 입력 (주소 등) 설정 */}
+          {isRepeatableInputs && (
+            <Box sx={{ mb: 2, p: 2, bgcolor: 'grey.50', borderRadius: 2 }}>
+              <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                입력 형식 (텍스트와 입력칸을 순서대로 구성)
+              </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
+                응답 시 ① 한 행이 먼저 보이고, + 버튼으로 같은 형식의 행을 추가할 수 있습니다.
+              </Typography>
+              {(repeatableConfig.parts || []).map((part, index) => (
+                <Box key={index} sx={{ display: 'flex', gap: 1, mb: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <Chip
+                    size="small"
+                    label={part.type === 'text' ? '텍스트' : '입력칸'}
+                    color={part.type === 'text' ? 'default' : 'primary'}
+                    variant="outlined"
+                  />
+                  {part.type === 'text' ? (
+                    <TextField
+                      size="small"
+                      value={part.value || ''}
+                      onChange={(e) => updateRepeatablePart(index, { value: e.target.value })}
+                      placeholder="예: 광진구 "
+                      sx={{ flex: 1, minWidth: 120 }}
+                    />
+                  ) : (
+                    <>
+                      <TextField
+                        size="small"
+                        value={part.key || ''}
+                        onChange={(e) => updateRepeatablePart(index, { key: e.target.value })}
+                        placeholder="필드 키 (영문)"
+                        sx={{ width: 120 }}
+                      />
+                      <TextField
+                        size="small"
+                        value={part.placeholder || ''}
+                        onChange={(e) => updateRepeatablePart(index, { placeholder: e.target.value })}
+                        placeholder="placeholder"
+                        sx={{ width: 100 }}
+                      />
+                    </>
+                  )}
+                  <IconButton size="small" onClick={() => removeRepeatablePart(index)}>
+                    <Delete fontSize="small" />
+                  </IconButton>
+                </Box>
+              ))}
+              <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+                <Button startIcon={<Add />} onClick={() => addRepeatablePart('text')} size="small" variant="outlined">
+                  텍스트 추가
+                </Button>
+                <Button startIcon={<Add />} onClick={() => addRepeatablePart('input')} size="small" variant="outlined">
+                  입력칸 추가
+                </Button>
+              </Stack>
+              {(repeatableConfig.parts || []).length === 0 && (
+                <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                  예: 텍스트 "광진구 " → 입력칸(gu) → 텍스트 " 동 " → 입력칸(dong) → … → " 호(토지, 건축물)"
+                </Typography>
+              )}
             </Box>
           )}
           
@@ -1203,6 +1398,8 @@ function QuestionEditor({
           </Button>
         </DialogActions>
       </Dialog>
+        </Box>
+      </Collapse>
     </Paper>
   );
 }
