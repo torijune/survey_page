@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, TextField, Button, Typography, IconButton } from '@mui/material';
+import { Box, TextField, Button, Typography, IconButton, Radio, RadioGroup, FormControlLabel } from '@mui/material';
 import { Add, Remove } from '@mui/icons-material';
 import { Question } from '../../../api/surveys';
 import type { RepeatableInputsConfig } from '../../../api/surveys';
@@ -92,12 +92,20 @@ export default function RepeatableInputsQuestion({
               );
             }
             if (part.type === 'input' && part.key) {
+              const baseCh = Math.max(2, Math.min(35, part.inputWidth ?? 8));
+              const placeholderLen = (part.placeholder || '').length;
+              const minCh = placeholderLen > 0 ? Math.max(baseCh, placeholderLen) : baseCh;
+              const value = (row[part.key] || '').toString();
+              const valueOrPlaceholder = value || part.placeholder || '';
+              // ()-()-() 같은 placeholder가 끝까지 차도록: 내용 길이에 맞춰 너비
+              const contentLen = valueOrPlaceholder.length;
+              const widthCh = Math.min(60, Math.max(minCh, contentLen));
               return (
                 <Box key={partIndex} component="span" sx={{ display: 'inline-flex', alignItems: 'center' }}>
                   <Typography component="span" sx={{ fontSize: currentFontSize.body1 }}>(</Typography>
                   <TextField
                     size="small"
-                    value={row[part.key] || ''}
+                    value={value}
                     onChange={(e) => updateRow(rowIndex, part.key!, e.target.value)}
                     placeholder={part.placeholder}
                     variant="standard"
@@ -105,15 +113,57 @@ export default function RepeatableInputsQuestion({
                       disableUnderline: true,
                       sx: {
                         fontSize: currentFontSize.body1,
-                        minWidth: 60,
-                        maxWidth: 120,
-                        '& input': { py: 0.25, px: 0.5 },
+                        width: `${widthCh}ch`,
+                        minWidth: `${minCh}ch`,
+                        maxWidth: '100%',
+                        boxSizing: 'border-box',
+                        '& input': { py: 0.25, px: 0.5, boxSizing: 'border-box', width: '100%', minWidth: 0 },
                         border: '1px solid #D1D5DB',
                         borderRadius: 0.5,
                         backgroundColor: '#fff',
                       },
                     }}
                   />
+                  <Typography component="span" sx={{ fontSize: currentFontSize.body1 }}>)</Typography>
+                </Box>
+              );
+            }
+            if (part.type === 'select' && part.key) {
+              const options = (part.options && part.options.length >= 2)
+                ? part.options
+                : [
+                    { label: '토지', value: 'land' },
+                    { label: '건축물', value: 'building' },
+                  ];
+              const label = part.label || '유형';
+              return (
+                <Box key={partIndex} component="span" sx={{ display: 'inline-flex', alignItems: 'center', flexWrap: 'wrap', gap: 0.5, ml: 0.5 }}>
+                  <Typography component="span" sx={{ fontSize: currentFontSize.body1, color: '#1F2937' }}>
+                    (→ {label} :
+                  </Typography>
+                  <RadioGroup
+                    row
+                    name={`${part.key}-row-${rowIndex}`}
+                    value={row[part.key] || ''}
+                    onChange={(e) => updateRow(rowIndex, part.key!, e.target.value)}
+                    sx={{ display: 'inline-flex', gap: 0 }}
+                  >
+                    {options.map((opt, oi) => (
+                      <FormControlLabel
+                        key={oi}
+                        value={opt.value}
+                        control={
+                          <Radio size="small" sx={{ py: 0, '& .MuiSvgIcon-root': { fontSize: 18 } }} />
+                        }
+                        label={
+                          <Typography component="span" sx={{ fontSize: currentFontSize.body1 }}>
+                            {opt.label}
+                          </Typography>
+                        }
+                        sx={{ mr: 1.5 }}
+                      />
+                    ))}
+                  </RadioGroup>
                   <Typography component="span" sx={{ fontSize: currentFontSize.body1 }}>)</Typography>
                 </Box>
               );

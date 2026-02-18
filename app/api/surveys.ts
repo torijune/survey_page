@@ -41,12 +41,18 @@ export interface RankingConfig {
   rank_labels: string[];
 }
 
-/** 반복 입력 문항: 텍스트와 입력 필드가 번갈아 나오는 한 줄. + 버튼으로 행 추가 */
+/** 반복 입력 문항: 텍스트·입력 필드·유형 선택이 번갈아 나오는 한 줄. + 버튼으로 행 추가 */
 export interface RepeatableInputPart {
-  type: 'text' | 'input';
+  type: 'text' | 'input' | 'select';
   value?: string;   // type === 'text' 일 때 표시할 텍스트
-  key?: string;     // type === 'input' 일 때 필드 키 (각 행의 객체 키)
+  key?: string;     // type === 'input' | 'select' 일 때 필드 키 (각 행의 객체 키)
   placeholder?: string;
+  /** type === 'input' 일 때 입력칸 기본 너비 (ch 단위, 약 8 = 8글자). placeholder/입력 길이에 따라 자동 확장. 미리보기 edit에서 드래그로 조절 */
+  inputWidth?: number;
+  /** type === 'select' 일 때 앞에 붙는 라벨 (예: "유형") */
+  label?: string;
+  /** type === 'select' 일 때 선택지. 없으면 기본 "토지 / 건축물" */
+  options?: { label: string; value: string }[];
 }
 
 export interface RepeatableInputsConfig {

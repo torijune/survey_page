@@ -296,12 +296,22 @@ function QuestionEditor({
   const handleRepeatablePartsChange = (parts: RepeatableInputPart[]) => {
     onChange({ ...question, repeatable_config: { parts } });
   };
-  const addRepeatablePart = (type: 'text' | 'input') => {
+  const addRepeatablePart = (type: 'text' | 'input' | 'select') => {
     const parts = [...(repeatableConfig.parts || [])];
     if (type === 'text') {
       parts.push({ type: 'text', value: '' });
-    } else {
+    } else if (type === 'input') {
       parts.push({ type: 'input', key: `field_${parts.filter(p => p.type === 'input').length + 1}` });
+    } else {
+      parts.push({
+        type: 'select',
+        key: 'asset_type',
+        label: '유형',
+        options: [
+          { label: '토지', value: 'land' },
+          { label: '건축물', value: 'building' },
+        ],
+      });
     }
     handleRepeatablePartsChange(parts);
   };
@@ -1001,8 +1011,8 @@ function QuestionEditor({
                 <Box key={index} sx={{ display: 'flex', gap: 1, mb: 1, alignItems: 'center', flexWrap: 'wrap' }}>
                   <Chip
                     size="small"
-                    label={part.type === 'text' ? '텍스트' : '입력칸'}
-                    color={part.type === 'text' ? 'default' : 'primary'}
+                    label={part.type === 'text' ? '텍스트' : part.type === 'select' ? '유형 선택' : '입력칸'}
+                    color={part.type === 'text' ? 'default' : part.type === 'select' ? 'secondary' : 'primary'}
                     variant="outlined"
                   />
                   {part.type === 'text' ? (
@@ -1013,6 +1023,43 @@ function QuestionEditor({
                       placeholder="예: 광진구 "
                       sx={{ flex: 1, minWidth: 120 }}
                     />
+                  ) : part.type === 'select' ? (
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1 }}>
+                      <TextField
+                        size="small"
+                        label="필드 키"
+                        value={part.key || ''}
+                        onChange={(e) => updateRepeatablePart(index, { key: e.target.value })}
+                        placeholder="예: asset_type"
+                        sx={{ width: 120 }}
+                      />
+                      <TextField
+                        size="small"
+                        label="라벨"
+                        value={part.label || ''}
+                        onChange={(e) => updateRepeatablePart(index, { label: e.target.value })}
+                        placeholder="예: 유형"
+                        sx={{ width: 90 }}
+                      />
+                      <Typography variant="caption" color="text.secondary" sx={{ alignSelf: 'center' }}>선택지:</Typography>
+                      {(part.options || []).map((opt, oi) => (
+                        <TextField
+                          key={oi}
+                          size="small"
+                          value={opt.label}
+                          onChange={(e) => {
+                            const next = [...(part.options || [])];
+                            next[oi] = { ...next[oi], label: e.target.value };
+                            updateRepeatablePart(index, { options: next });
+                          }}
+                          placeholder={`${oi + 1} (예: ${oi === 0 ? '토지' : '건축물'})`}
+                          sx={{ width: 90 }}
+                        />
+                      ))}
+                      <Typography variant="caption" color="text.secondary" sx={{ width: '100%', mt: 0.5 }}>
+                        → 응답 시 각 행마다 「→ 라벨 : ① 선택지1 ② 선택지2」 형태로 표시됩니다. 여기서는 문구만 수정하세요.
+                      </Typography>
+                    </Box>
                   ) : (
                     <>
                       <TextField
@@ -1036,12 +1083,15 @@ function QuestionEditor({
                   </IconButton>
                 </Box>
               ))}
-              <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+              <Stack direction="row" spacing={1} sx={{ mt: 1 }} flexWrap="wrap">
                 <Button startIcon={<Add />} onClick={() => addRepeatablePart('text')} size="small" variant="outlined">
                   텍스트 추가
                 </Button>
                 <Button startIcon={<Add />} onClick={() => addRepeatablePart('input')} size="small" variant="outlined">
                   입력칸 추가
+                </Button>
+                <Button startIcon={<Add />} onClick={() => addRepeatablePart('select')} size="small" variant="outlined" color="secondary">
+                  유형 선택 추가
                 </Button>
               </Stack>
               {(repeatableConfig.parts || []).length === 0 && (

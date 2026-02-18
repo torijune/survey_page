@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Box,
   Button,
@@ -104,6 +104,50 @@ export default function EditablePreview({
   const [logoSettingsOpen, setLogoSettingsOpen] = useState(false);
   const logoInputRef = React.useRef<HTMLInputElement>(null);
   const [expandedDescIndices, setExpandedDescIndices] = useState<Set<number>>(new Set());
+  /** 미리보기 edit: 반복 입력 placeholder 너비 드래그 리사이즈 */
+  const [repeatableResize, setRepeatableResize] = useState<{
+    sectionIndex: number;
+    questionIndex: number;
+    partIndex: number;
+    startX: number;
+    startCh: number;
+  } | null>(null);
+  const surveyRef = useRef(survey);
+  surveyRef.current = survey;
+  useEffect(() => {
+    if (!repeatableResize) return;
+    const CH_PER_PX = 1 / 8;
+    const onMove = (e: MouseEvent) => {
+      const { sectionIndex, questionIndex, partIndex, startX, startCh } = repeatableResize;
+      const deltaCh = (e.clientX - startX) * CH_PER_PX;
+      const newCh = Math.round(Math.max(2, Math.min(35, startCh + deltaCh)));
+      const s = surveyRef.current;
+      const parts = [...(s.sections[sectionIndex]?.questions[questionIndex]?.repeatable_config?.parts || [])];
+      if (parts[partIndex] && parts[partIndex].type === 'input') {
+        parts[partIndex] = { ...parts[partIndex], inputWidth: newCh };
+        const newSections = [...s.sections];
+        const newQuestions = [...newSections[sectionIndex].questions];
+        newQuestions[questionIndex] = {
+          ...newQuestions[questionIndex],
+          repeatable_config: { parts },
+        };
+        newSections[sectionIndex] = { ...newSections[sectionIndex], questions: newQuestions };
+        onSurveyChange({ ...s, sections: newSections });
+        setHasChanges(true);
+      }
+    };
+    const onUp = () => setRepeatableResize(null);
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    return () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, [repeatableResize, onSurveyChange]);
   const toggleDescExpanded = (index: number) => {
     setExpandedDescIndices(prev => {
       const next = new Set(prev);
@@ -653,22 +697,86 @@ export default function EditablePreview({
           </Box>
         )}
 
-        {/* 반복 입력 (주소 등) */}
+        {/* 반복 입력 (주소 등) - 실제 설문과 동일 스타일, placeholder 너비 드래그 리사이즈 */}
         {question.type === 'repeatable_inputs' && (
           <Box sx={{ ml: 5, mt: 2 }}>
             {(question.repeatable_config?.parts?.length ?? 0) > 0 ? (
               <Box>
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 0.5, mb: 2, pb: 2, borderBottom: '1px solid #E5E7EB' }}>
-                  <Typography component="span" variant="body2">①</Typography>
-                  {(question.repeatable_config as { parts?: { type: string; value?: string; key?: string }[] }).parts?.map((part: { type: string; value?: string; key?: string }, i: number) =>
-                    part.type === 'text' ? (
-                      <Typography key={i} component="span" variant="body2">{part.value || ''}</Typography>
-                    ) : (
-                      <Typography key={i} component="span" variant="body2" sx={{ border: '1px solid #D1D5DB', px: 0.5, borderRadius: 0.5 }}>( )</Typography>
-                    )
-                  )}
+                  <Typography component="span" variant="body2" sx={{ fontWeight: 500, mr: 0.5 }}>①</Typography>
+                  {((question.repeatable_config as { parts?: { type: string; value?: string; key?: string; label?: string; inputWidth?: number; options?: { label: string }[] }[] }).parts || []).map((part: { type: string; value?: string; key?: string; label?: string; inputWidth?: number; options?: { label: string }[] }, i: number) => {
+                    if (part.type === 'text') {
+                      return <Typography key={i} component="span" variant="body2">{part.value || ''}</Typography>;
+                    }
+                    if (part.type === 'select') {
+                      return (
+                        <Typography key={i} component="span" variant="body2" sx={{ color: '#6B7280', ml: 0.5 }}>
+                          (→ {part.label || '유형'} : 선택)
+                        </Typography>
+                      );
+                    }
+                    if (part.type === 'input') {
+                      const ch = Math.max(2, Math.min(35, part.inputWidth ?? 8));
+                      return (
+                        <Box key={i} component="span" sx={{ display: 'inline-flex', alignItems: 'center' }}>
+                          <Typography component="span" variant="body2">(</Typography>
+                          <Box
+                            component="span"
+                            sx={{
+                              display: 'inline-flex',
+                              alignItems: 'stretch',
+                              position: 'relative',
+                              width: `${ch}ch`,
+                              minWidth: '2ch',
+                            }}
+                          >
+                            <Box
+                              component="span"
+                              sx={{
+                                display: 'inline-block',
+                                width: '100%',
+                                height: 28,
+                                border: '1px solid #D1D5DB',
+                                borderRadius: 0.5,
+                                backgroundColor: '#fff',
+                                boxSizing: 'border-box',
+                              }}
+                            />
+                            <Tooltip title="드래그하여 너비 조절">
+                              <Box
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  setRepeatableResize({
+                                    sectionIndex,
+                                    questionIndex,
+                                    partIndex: i,
+                                    startX: e.clientX,
+                                    startCh: ch,
+                                  });
+                                }}
+                                sx={{
+                                  position: 'absolute',
+                                  right: 0,
+                                  top: 0,
+                                  bottom: 0,
+                                  width: 8,
+                                  cursor: 'col-resize',
+                                  zIndex: 1,
+                                  '&:hover': { backgroundColor: 'rgba(59, 130, 246, 0.25)' },
+                                  borderRadius: '0 4px 4px 0',
+                                }}
+                              />
+                            </Tooltip>
+                          </Box>
+                          <Typography component="span" variant="body2">)</Typography>
+                        </Box>
+                      );
+                    }
+                    return null;
+                  })}
                 </Box>
-                <Typography variant="caption" color="text.secondary">+ 추가 버튼으로 행 추가</Typography>
+                <Typography variant="caption" color="text.secondary">입력칸 오른쪽 가장자리 드래그로 너비 조절 · + 추가 버튼으로 행 추가</Typography>
               </Box>
             ) : (
               <Box sx={{ p: 2, border: '1px dashed #D1D5DB', borderRadius: 2, backgroundColor: '#F9FAFB', color: '#9CA3AF' }}>
