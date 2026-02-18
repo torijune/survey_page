@@ -102,7 +102,7 @@ export default function MultipleChoiceQuestion({
                     </Typography>
                   }
                   sx={{
-                    alignItems: 'flex-start',
+                    alignItems: 'center',
                     m: 0,
                   }}
                 />

@@ -825,7 +825,7 @@ def _map_question_response(question) -> QuestionResponse:
         is_hidden=question.is_hidden,
         question_number=question.question_number,
         validation_rules=question.validation_rules.to_dict() if question.validation_rules else None,
-        conditional_logic=question.conditional_logic.to_dict() if question.conditional_logic else None,
+        conditional_logic=[c.to_dict() for c in question.conditional_logic] if question.conditional_logic else None,
         likert_config=question.likert_config.to_dict() if question.likert_config else None,
         ranking_config=question.ranking_config.to_dict() if question.ranking_config else None,
         repeatable_config=question.repeatable_config,

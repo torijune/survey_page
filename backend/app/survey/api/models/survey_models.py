@@ -1,5 +1,5 @@
-from pydantic import BaseModel, Field
-from typing import Optional, List, Any, Dict
+from pydantic import BaseModel, Field, field_validator, model_validator
+from typing import Optional, List, Any, Dict, Union
 from datetime import datetime
 
 
@@ -40,6 +40,17 @@ class QuestionOptionRequest(BaseModel):
     allow_other: bool = False
 
 
+def _normalize_conditional_logic_raw(v: Any) -> Any:
+    """단일 객체를 리스트로 감싸서, 항상 list 또는 None으로 만듦."""
+    if v is None:
+        return None
+    if isinstance(v, list):
+        return v if v else None
+    if isinstance(v, dict):
+        return [v]
+    return None
+
+
 class QuestionCreateRequest(BaseModel):
     section_id: str
     type: str  # single_choice, multiple_choice, likert, short_text, long_text, number, date, dropdown, ranking
@@ -50,11 +61,19 @@ class QuestionCreateRequest(BaseModel):
     is_hidden: bool = False
     question_number: Optional[str] = None  # 질문 넘버링 (SQ1, SQ2, A1, A2, B1, B2 등)
     validation_rules: Optional[ValidationRulesRequest] = None
-    conditional_logic: Optional[ConditionalLogicRequest] = None
+    conditional_logic: Optional[List[ConditionalLogicRequest]] = None
     likert_config: Optional[LikertConfigRequest] = None
     ranking_config: Optional[RankingConfigRequest] = None
     repeatable_config: Optional[Dict[str, Any]] = None  # {"parts": [{"type": "text"|"input", "value"?, "key"?}]}
     options: Optional[List[QuestionOptionRequest]] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_conditional_logic(cls, data: Any) -> Any:
+        """요청 본문에서 conditional_logic을 항상 리스트 형태로 정규화."""
+        if isinstance(data, dict) and "conditional_logic" in data:
+            data = {**data, "conditional_logic": _normalize_conditional_logic_raw(data["conditional_logic"])}
+        return data
 
 
 class QuestionUpdateRequest(BaseModel):
@@ -66,11 +85,19 @@ class QuestionUpdateRequest(BaseModel):
     is_hidden: Optional[bool] = None
     question_number: Optional[str] = None  # 질문 넘버링 (SQ1, SQ2, A1, A2, B1, B2 등)
     validation_rules: Optional[ValidationRulesRequest] = None
-    conditional_logic: Optional[ConditionalLogicRequest] = None
+    conditional_logic: Optional[List[ConditionalLogicRequest]] = None
     likert_config: Optional[LikertConfigRequest] = None
     ranking_config: Optional[RankingConfigRequest] = None
     repeatable_config: Optional[Dict[str, Any]] = None
     options: Optional[List[QuestionOptionRequest]] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_conditional_logic(cls, data: Any) -> Any:
+        """요청 본문에서 conditional_logic을 항상 리스트 형태로 정규화."""
+        if isinstance(data, dict) and "conditional_logic" in data:
+            data = {**data, "conditional_logic": _normalize_conditional_logic_raw(data["conditional_logic"])}
+        return data
 
 
 class SectionCreateRequest(BaseModel):
@@ -151,7 +178,8 @@ class QuestionResponse(BaseModel):
     is_hidden: bool = False
     question_number: Optional[str] = None  # 질문 넘버링 (SQ1, SQ2, A1, A2, B1, B2 등)
     validation_rules: Optional[Dict[str, Any]] = None
-    conditional_logic: Optional[Dict[str, Any]] = None
+    # 단일 객체(기존 데이터) 또는 배열(여러 조건) 모두 허용
+    conditional_logic: Optional[Union[Dict[str, Any], List[Dict[str, Any]]]] = None
     likert_config: Optional[Dict[str, Any]] = None
     ranking_config: Optional[Dict[str, Any]] = None
     repeatable_config: Optional[Dict[str, Any]] = None

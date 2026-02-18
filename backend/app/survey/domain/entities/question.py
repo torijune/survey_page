@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Optional, List, Any, Dict
+from typing import Optional, List, Any, Dict  # Any used in ConditionalLogic.from_dict_or_list
 from uuid import UUID
 
 
@@ -79,6 +79,17 @@ class ConditionalLogic:
             action=data.get("action", "show"),
             target_section_id=data.get("target_section_id"),
         )
+
+    @classmethod
+    def from_dict_or_list(cls, data: Any) -> Optional[List["ConditionalLogic"]]:
+        """API/DB에서 단일 객체 또는 배열로 올 수 있는 conditional_logic 파싱."""
+        if data is None:
+            return None
+        if isinstance(data, list):
+            out = [cls.from_dict(d) for d in data if d]
+            return out if out else None
+        one = cls.from_dict(data)
+        return [one] if one else None
 
 
 @dataclass
@@ -178,7 +189,7 @@ class Question:
     is_hidden: bool = False  # 숨기기 기능 (미리보기/실제 설문에서 숨김)
     question_number: Optional[str] = None  # 질문 넘버링 (SQ1, SQ2, A1, A2, B1, B2 등)
     validation_rules: Optional[ValidationRules] = None
-    conditional_logic: Optional[ConditionalLogic] = None
+    conditional_logic: Optional[List[ConditionalLogic]] = None
     likert_config: Optional[LikertConfig] = None
     ranking_config: Optional[RankingConfig] = None
     repeatable_config: Optional[Dict[str, Any]] = None  # { "parts": [ {"type": "text"|"input", "value"?, "key"?} ] }
@@ -200,7 +211,7 @@ class Question:
             "is_hidden": self.is_hidden,
             "question_number": self.question_number,
             "validation_rules": self.validation_rules.to_dict() if self.validation_rules else None,
-            "conditional_logic": self.conditional_logic.to_dict() if self.conditional_logic else None,
+            "conditional_logic": [c.to_dict() for c in self.conditional_logic] if self.conditional_logic else None,
             "likert_config": self.likert_config.to_dict() if self.likert_config else None,
             "ranking_config": self.ranking_config.to_dict() if self.ranking_config else None,
             "repeatable_config": self.repeatable_config,

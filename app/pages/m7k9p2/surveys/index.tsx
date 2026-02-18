@@ -58,8 +58,12 @@ import Head from 'next/head';
 import {
   Survey,
   getSurveys,
+  getSurvey,
   createSurvey,
+  updateSurvey,
   deleteSurvey,
+  createSection,
+  createQuestion,
   downloadResponses,
   publishSurvey,
   closeSurvey,
@@ -91,6 +95,7 @@ export default function SurveyListPage() {
   const [qrSurvey, setQrSurvey] = useState<Survey | null>(null);
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
+  const [copyingSurveyId, setCopyingSurveyId] = useState<string | null>(null);
   const qrRef = useRef<HTMLDivElement>(null);
   
   useEffect(() => {
@@ -190,6 +195,72 @@ export default function SurveyListPage() {
     setQrSurvey(survey);
     setQrDialogOpen(true);
     setMenuAnchor(null);
+  };
+
+  const handleCopySurvey = async (survey: Survey) => {
+    setMenuAnchor(null);
+    setCopyingSurveyId(survey.id!);
+    try {
+      const full = await getSurvey(survey.id!);
+      const newTitle = `${(full.title || '제목 없음').trim()}_copy`;
+      const created = await createSurvey({ title: newTitle });
+      await updateSurvey(created.id!, {
+        description: full.description,
+        description_pages: full.description_pages,
+        allow_edit: full.allow_edit,
+        duplicate_prevention: full.duplicate_prevention,
+        logo_url: full.logo_url ?? undefined,
+        organization_name: full.organization_name ?? undefined,
+        organization_subtitle: full.organization_subtitle ?? undefined,
+        logo_width: full.logo_width ?? undefined,
+        logo_height: full.logo_height ?? undefined,
+        text_position: full.text_position ?? undefined,
+        first_page_content: full.first_page_content ?? undefined,
+        completion_content: full.completion_content ?? undefined,
+      });
+      const newSectionIds: string[] = [];
+      for (let sIndex = 0; sIndex < (full.sections || []).length; sIndex++) {
+        const section = full.sections[sIndex];
+        const newSection = await createSection({
+          survey_id: created.id!,
+          title: section.title,
+          description: section.description,
+          order_index: sIndex,
+        });
+        newSectionIds.push(newSection.id!);
+      }
+      for (let sIndex = 0; sIndex < (full.sections || []).length; sIndex++) {
+        const section = full.sections[sIndex];
+        const newSectionId = newSectionIds[sIndex];
+        for (let qIndex = 0; qIndex < (section.questions || []).length; qIndex++) {
+          const q = section.questions[qIndex];
+          const options = (q.options || []).map(({ id, question_id, ...rest }) => rest);
+          await createQuestion({
+            section_id: newSectionId,
+            type: q.type,
+            title: q.title,
+            description: q.description,
+            required: q.required,
+            order_index: qIndex,
+            is_hidden: q.is_hidden,
+            question_number: q.question_number,
+            validation_rules: q.validation_rules,
+            conditional_logic: q.conditional_logic,
+            likert_config: q.likert_config,
+            ranking_config: q.ranking_config,
+            repeatable_config: q.repeatable_config,
+            options,
+          });
+        }
+      }
+      await loadSurveys();
+      setSnackbarMessage(`"${newTitle}" 설문이 복사되었습니다.`);
+      setSnackbarOpen(true);
+    } catch (e: any) {
+      setError(e?.message || '설문 복사에 실패했습니다.');
+    } finally {
+      setCopyingSurveyId(null);
+    }
   };
 
   const handleDownloadQR = () => {
@@ -676,6 +747,17 @@ export default function SurveyListPage() {
       >
         <MenuItem onClick={() => router.push(`/m7k9p2/surveys/${menuAnchor?.survey.id}/preview`)}>
           <Visibility fontSize="small" sx={{ mr: 1.5, color: 'grey.600' }} /> 미리보기
+        </MenuItem>
+        <MenuItem
+          onClick={() => menuAnchor && handleCopySurvey(menuAnchor.survey)}
+          disabled={copyingSurveyId === menuAnchor?.survey.id}
+        >
+          {copyingSurveyId === menuAnchor?.survey.id ? (
+            <CircularProgress size={16} sx={{ mr: 1.5 }} />
+          ) : (
+            <ContentCopy fontSize="small" sx={{ mr: 1.5, color: 'grey.600' }} />
+          )}
+          설문 복사
         </MenuItem>
         {menuAnchor?.survey.status === 'published' && (
           <MenuItem onClick={() => handleCopyLink(menuAnchor.survey)}>

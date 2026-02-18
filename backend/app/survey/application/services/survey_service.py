@@ -266,16 +266,20 @@ class SurveyService:
             pattern=request.pattern,
         )
     
-    def _map_conditional_logic(self, request) -> Optional[ConditionalLogic]:
+    def _map_conditional_logic(self, request) -> Optional[List[ConditionalLogic]]:
         if not request:
             return None
-        return ConditionalLogic(
-            question_id=request.question_id,
-            operator=request.operator,
-            value=request.value,
-            action=request.action,
-            target_section_id=request.target_section_id,
-        )
+        def one(r) -> ConditionalLogic:
+            return ConditionalLogic(
+                question_id=r.question_id,
+                operator=r.operator,
+                value=r.value,
+                action=r.action,
+                target_section_id=r.target_section_id,
+            )
+        if isinstance(request, list):
+            return [one(r) for r in request]
+        return [one(request)]
     
     def _map_likert_config(self, request) -> Optional[LikertConfig]:
         if not request:

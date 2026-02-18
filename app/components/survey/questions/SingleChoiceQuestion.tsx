@@ -95,7 +95,7 @@ export default function SingleChoiceQuestion({
                   </Typography>
                 }
                 sx={{
-                  alignItems: 'flex-start',
+                  alignItems: 'center',
                   m: 0,
                 }}
               />

@@ -603,11 +603,28 @@ export default function SurveyBuilder({ surveyId }: SurveyBuilderProps) {
       };
       console.log('설문 저장 데이터:', updateData);
       await updateSurvey(survey.id!, updateData);
-      
-      // 모든 섹션 업데이트를 병렬로 처리
+
+      // 1) id 없는 새 섹션을 DB에 생성하고, 각 섹션의 최종 id 목록 확보
+      const resolvedSectionIds: string[] = [];
+      for (let i = 0; i < survey.sections.length; i++) {
+        const section = survey.sections[i];
+        if (section.id) {
+          resolvedSectionIds[i] = section.id;
+        } else {
+          const created = await createSection({
+            survey_id: survey.id!,
+            title: section.title || '',
+            description: section.description,
+            order_index: section.order_index,
+          });
+          resolvedSectionIds[i] = created.id!;
+        }
+      }
+
+      // 2) 기존 섹션(id 있음)만 업데이트 (제목·설명·순서)
       const sectionUpdatePromises = survey.sections
         .filter(section => section.id)
-        .map(section => 
+        .map(section =>
           updateSection(section.id!, {
             title: section.title,
             description: section.description,
@@ -615,29 +632,55 @@ export default function SurveyBuilder({ surveyId }: SurveyBuilderProps) {
           })
         );
       await Promise.all(sectionUpdatePromises);
-      
-      // 모든 질문 업데이트를 병렬로 처리
+
+      // 3) 문항: id 있으면 update, 없으면 create (새 섹션/기존 섹션 모두)
       const questionUpdatePromises: Promise<any>[] = [];
-      for (const section of survey.sections) {
+      const normalizeConditionalLogic = (raw: any) => {
+        if (raw == null) return undefined;
+        if (Array.isArray(raw)) return raw.length > 0 ? raw : undefined;
+        return raw;
+      };
+      for (let i = 0; i < survey.sections.length; i++) {
+        const section = survey.sections[i];
+        const sectionId = resolvedSectionIds[i];
+        const titleToSave = (t: string) => (t === '새 문항' ? '' : t);
         for (const question of section.questions) {
+          const conditionalLogic = normalizeConditionalLogic(question.conditional_logic);
           if (question.id) {
-            // 제목이 "새 문항"이면 빈 문자열로 저장
-            const titleToSave = question.title === '새 문항' ? '' : question.title;
             questionUpdatePromises.push(
               updateQuestion(question.id, {
                 type: question.type,
-                title: titleToSave,
+                title: titleToSave(question.title),
                 description: question.description,
                 required: question.required,
                 order_index: question.order_index,
                 is_hidden: question.is_hidden,
                 question_number: question.question_number,
                 validation_rules: question.validation_rules,
-                conditional_logic: question.conditional_logic || null,
+                conditional_logic: conditionalLogic ?? null,
                 likert_config: question.likert_config,
                 ranking_config: question.ranking_config || null,
                 repeatable_config: question.repeatable_config || null,
                 options: question.options,
+              })
+            );
+          } else {
+            questionUpdatePromises.push(
+              createQuestion({
+                section_id: sectionId,
+                type: question.type,
+                title: titleToSave(question.title),
+                description: question.description,
+                required: question.required,
+                order_index: question.order_index,
+                is_hidden: question.is_hidden,
+                question_number: question.question_number,
+                validation_rules: question.validation_rules,
+                conditional_logic: conditionalLogic,
+                likert_config: question.likert_config,
+                ranking_config: question.ranking_config,
+                repeatable_config: question.repeatable_config,
+                options: question.options || [],
               })
             );
           }

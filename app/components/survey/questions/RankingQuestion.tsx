@@ -252,6 +252,7 @@ export default function RankingQuestion({
                       width: '100%',
                       padding: '12px',
                       borderRadius: 1,
+                      alignItems: 'center',
                       backgroundColor: isSelected ? '#EFF6FF' : 'transparent',
                       border: isSelected ? '1px solid #3B82F6' : '1px solid transparent',
                       '&:hover': {

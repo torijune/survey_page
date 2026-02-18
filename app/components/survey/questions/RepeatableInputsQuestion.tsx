@@ -160,7 +160,7 @@ export default function RepeatableInputsQuestion({
                             {opt.label}
                           </Typography>
                         }
-                        sx={{ mr: 1.5 }}
+                        sx={{ mr: 1.5, alignItems: 'center' }}
                       />
                     ))}
                   </RadioGroup>

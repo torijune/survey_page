@@ -236,80 +236,79 @@ export default function SurveyForm({ survey, onComplete, showNavigation = false,
     return allQuestions.filter(q => !q.is_hidden);
   }, [allQuestions]);
   
-  // 조건부 로직 처리 - 표시할 질문 필터링
+  // 조건 한 개 평가 (표시 여부는 호출 쪽에서 action으로 반영)
+  const evaluateOneCondition = (c: { question_id: string; operator: string; value: any }, ans: Record<string, { answer_value: any }>): boolean => {
+    const answer = ans[c.question_id];
+    if (!answer) return false;
+    const answerValue = answer.answer_value;
+    const conditionValues = Array.isArray(c.value) ? c.value : [c.value];
+    let conditionMet = false;
+    switch (c.operator) {
+      case 'equals':
+        if (Array.isArray(answerValue)) {
+          conditionMet = answerValue.some((val: any) => conditionValues.includes(val));
+        } else {
+          conditionMet = conditionValues.includes(answerValue);
+        }
+        break;
+      case 'not_equals':
+        if (Array.isArray(answerValue)) {
+          conditionMet = !answerValue.some((val: any) => conditionValues.includes(val));
+        } else {
+          conditionMet = !conditionValues.includes(answerValue);
+        }
+        break;
+      case 'contains':
+        if (Array.isArray(answerValue)) {
+          conditionMet = conditionValues.some((val: any) => answerValue.includes(val));
+        } else {
+          conditionMet = conditionValues.includes(answerValue);
+        }
+        break;
+      case 'not_contains':
+        if (Array.isArray(answerValue)) {
+          conditionMet = !conditionValues.some((val: any) => answerValue.includes(val));
+        } else {
+          conditionMet = !conditionValues.includes(answerValue);
+        }
+        break;
+      case 'greater_than': {
+        const numValue = typeof answerValue === 'number' ? answerValue : parseFloat(String(answerValue));
+        conditionMet = conditionValues.some((val: any) => {
+          const numCondition = typeof val === 'number' ? val : parseFloat(String(val));
+          return !isNaN(numValue) && !isNaN(numCondition) && numValue > numCondition;
+        });
+        break;
+      }
+      case 'less_than': {
+        const numValue2 = typeof answerValue === 'number' ? answerValue : parseFloat(String(answerValue));
+        conditionMet = conditionValues.some((val: any) => {
+          const numCondition = typeof val === 'number' ? val : parseFloat(String(val));
+          return !isNaN(numValue2) && !isNaN(numCondition) && numValue2 < numCondition;
+        });
+        break;
+      }
+      default:
+        conditionMet = false;
+    }
+    return conditionMet;
+  };
+
+  // 조건부 로직 처리 - 표시할 질문 필터링 (여러 조건은 AND)
   const visibleQuestions = useMemo(() => {
     return visibleQuestionsList.filter(q => {
-      if (!q.conditional_logic) return true;
-      
-      const { question_id, operator, value, action } = q.conditional_logic;
-      const answer = answers[question_id];
-      
-      if (!answer) return action !== 'show';
-      
-      let conditionMet = false;
-      const answerValue = answer.answer_value;
-      
-      // value가 배열인지 확인 (다중 조건 값)
-      const conditionValues = Array.isArray(value) ? value : [value];
-      
-      switch (operator) {
-        case 'equals':
-          // 단일 값 응답: 조건 값 배열에 포함되는지 확인
-          // 다중 값 응답: 조건 값 배열과 겹치는지 확인
-          if (Array.isArray(answerValue)) {
-            conditionMet = answerValue.some(val => conditionValues.includes(val));
-          } else {
-            conditionMet = conditionValues.includes(answerValue);
-          }
-          break;
-        case 'not_equals':
-          // 단일 값 응답: 조건 값 배열에 포함되지 않는지 확인
-          // 다중 값 응답: 조건 값 배열과 겹치지 않는지 확인
-          if (Array.isArray(answerValue)) {
-            conditionMet = !answerValue.some(val => conditionValues.includes(val));
-          } else {
-            conditionMet = !conditionValues.includes(answerValue);
-          }
-          break;
-        case 'contains':
-          // 다중 선택 응답에서 조건 값 중 하나라도 포함되는지 확인
-          if (Array.isArray(answerValue)) {
-            conditionMet = conditionValues.some(val => answerValue.includes(val));
-          } else {
-            conditionMet = conditionValues.includes(answerValue);
-          }
-          break;
-        case 'not_contains':
-          // 다중 선택 응답에서 조건 값이 모두 포함되지 않는지 확인
-          if (Array.isArray(answerValue)) {
-            conditionMet = !conditionValues.some(val => answerValue.includes(val));
-          } else {
-            conditionMet = !conditionValues.includes(answerValue);
-          }
-          break;
-        case 'greater_than':
-          // 숫자 비교: 조건 값 중 하나라도보다 큰지 확인
-          const numValue = typeof answerValue === 'number' ? answerValue : parseFloat(String(answerValue));
-          conditionMet = conditionValues.some(val => {
-            const numCondition = typeof val === 'number' ? val : parseFloat(String(val));
-            return !isNaN(numValue) && !isNaN(numCondition) && numValue > numCondition;
-          });
-          break;
-        case 'less_than':
-          // 숫자 비교: 조건 값 중 하나라도보다 작은지 확인
-          const numValue2 = typeof answerValue === 'number' ? answerValue : parseFloat(String(answerValue));
-          conditionMet = conditionValues.some(val => {
-            const numCondition = typeof val === 'number' ? val : parseFloat(String(val));
-            return !isNaN(numValue2) && !isNaN(numCondition) && numValue2 < numCondition;
-          });
-          break;
-        default:
-          conditionMet = false;
-      }
-      
-      return action === 'show' ? conditionMet : !conditionMet;
+      const conditions = Array.isArray(q.conditional_logic)
+        ? q.conditional_logic
+        : q.conditional_logic
+          ? [q.conditional_logic]
+          : [];
+      if (conditions.length === 0) return true;
+
+      const allMet = conditions.every(c => evaluateOneCondition(c, answers));
+      const action = conditions[0].action;
+      return action === 'show' ? allMet : !allMet;
     });
-  }, [allQuestions, answers]);
+  }, [visibleQuestionsList, answers]);
   
   // 현재 질문
   const currentQuestion = visibleQuestions[currentQuestionIndex];

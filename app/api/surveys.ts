@@ -80,7 +80,8 @@ export interface Question {
   is_hidden?: boolean;
   question_number?: string; // 질문 넘버링 (SQ1, SQ2, A1, A2, B1, B2 등)
   validation_rules?: ValidationRules;
-  conditional_logic?: ConditionalLogic;
+  /** 단일 객체(기존) 또는 배열(여러 조건, AND) */
+  conditional_logic?: ConditionalLogic | ConditionalLogic[];
   likert_config?: LikertConfig;
   ranking_config?: RankingConfig;
   repeatable_config?: RepeatableInputsConfig;
@@ -331,7 +332,7 @@ export async function createQuestion(data: {
   is_hidden?: boolean;
   question_number?: string;
   validation_rules?: ValidationRules;
-  conditional_logic?: ConditionalLogic;
+  conditional_logic?: ConditionalLogic | ConditionalLogic[];
   likert_config?: LikertConfig;
   ranking_config?: RankingConfig;
   repeatable_config?: RepeatableInputsConfig;
@@ -356,7 +357,7 @@ export async function updateQuestion(questionId: string, data: {
   is_hidden?: boolean;
   question_number?: string;
   validation_rules?: ValidationRules;
-  conditional_logic?: ConditionalLogic | null;
+  conditional_logic?: ConditionalLogic | ConditionalLogic[] | null;
   likert_config?: LikertConfig;
   ranking_config?: RankingConfig | null;
   repeatable_config?: RepeatableInputsConfig | null;
