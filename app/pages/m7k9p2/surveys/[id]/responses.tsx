@@ -242,7 +242,65 @@ export default function ResponseDashboardPage() {
     if (!survey || !responses.length) return { columns: [], rows: [] };
 
     const questions = survey.sections.flatMap(s => s.questions).filter(q => !q.is_hidden);
-    
+
+    // 공통 포맷터 (백엔드 generate_csv/xlsx와 동일한 규칙)
+    const normalizeOptionCode = (raw: any): any => {
+      if (typeof raw === 'number') return raw;
+      if (typeof raw === 'string') {
+        if (raw.startsWith('option_')) {
+          const suffix = raw.split('_', 2)[1];
+          if (/^\d+$/.test(suffix)) return suffix;
+        }
+      }
+      return raw;
+    };
+
+    const formatAnswerForExport = (q: Question, item: ResponseItem | undefined): string => {
+      if (!item) return '';
+      if (item.answer_text) return item.answer_text;
+
+      const value = item.answer_value;
+      if (value === null || value === undefined) return '';
+
+      if (Array.isArray(value)) {
+        return value.map(v => String(normalizeOptionCode(v))).join(', ');
+      }
+      if (typeof value === 'object') {
+        return JSON.stringify(value);
+      }
+      return String(normalizeOptionCode(value));
+    };
+
+    const extractRepeatableFieldValue = (
+      item: ResponseItem | undefined,
+      fieldKey: string | undefined | null,
+      rowIndex: number
+    ): string => {
+      if (!item || !fieldKey) return '';
+      const value = item.answer_value;
+      if (value === null || value === undefined) return '';
+
+      if (Array.isArray(value) && value.length > 0) {
+        const idx = rowIndex - 1;
+        if (idx >= 0 && idx < value.length && typeof value[idx] === 'object' && value[idx] !== null) {
+          const v = (value[idx] as any)[fieldKey];
+          return v == null ? '' : String(v);
+        }
+        return '';
+      }
+      if (typeof value === 'object') {
+        const v = (value as any)[fieldKey];
+        return v == null ? '' : String(v);
+      }
+      return String(value);
+    };
+
+    type ExportColumnMeta =
+      | { kind: 'question'; question: Question }
+      | { kind: 'repeatable_input'; question: Question; fieldKey?: string | null; rowIndex: number; colIndex: number };
+
+    const exportColumns: ExportColumnMeta[] = [];
+
     // 컬럼 정의
     const columns = [
       {
@@ -283,18 +341,86 @@ export default function ResponseDashboardPage() {
         filter: 'agTextColumnFilter',
         cellRenderer: StatusCellRenderer,
       },
-      ...questions.map((q) => {
-        const questionNumber = q.question_number || '';
-        const headerName = questionNumber ? `${questionNumber}. ${q.title}` : q.title;
-        return {
-          field: `question_${q.id}`,
-          headerName: headerName,
+    ];
+
+    const getQuestionCode = (q: Question): string => {
+      if (q.question_number) {
+        return q.question_number.replace(/-/g, '_');
+      }
+      return `Q_${q.id}`;
+    };
+
+    // 질문 컬럼 및 반복 입력 분해
+    questions.forEach((q) => {
+      if (q.type === 'repeatable_inputs' && q.repeatable_config && Array.isArray(q.repeatable_config.parts)) {
+        const parts = q.repeatable_config.parts;
+        const fieldKeys = parts
+          .filter((part) => part && ((part as any).type === 'input' || (part as any).type === 'select'))
+          .map((part) => (part as any).key);
+
+        if (fieldKeys.length === 0) {
+          const questionNumber = q.question_number || '';
+          const headerName = questionNumber ? `${questionNumber}. ${q.title}` : q.title;
+          const field = `question_${q.id}`;
+          columns.push({
+            field,
+            headerName,
+            width: 200,
+            filter: ExcelStyleFilter,
+            tooltipValueGetter: (params: any) => params.value || '',
+          });
+          exportColumns.push({ kind: 'question', question: q });
+          return;
+        }
+
+        // 이 질문에 대해 응답 중 최대 행 수 계산
+        let maxRows = 1;
+        responses.forEach((resp) => {
+          resp.items.forEach((item) => {
+            if (item.question_id === q.id && Array.isArray(item.answer_value)) {
+              if (item.answer_value.length > maxRows) {
+                maxRows = item.answer_value.length;
+              }
+            }
+          });
+        });
+
+        for (let rowIndex = 1; rowIndex <= maxRows; rowIndex++) {
+          fieldKeys.forEach((fieldKey, colIndex) => {
+            const suffix = `${rowIndex}${colIndex + 1}`;
+            const baseCode = getQuestionCode(q);
+            const headerName = `${baseCode}_${suffix}`;
+            const field = `question_${q.id}_r${rowIndex}_c${colIndex + 1}`;
+            columns.push({
+              field,
+              headerName,
+              width: 200,
+              filter: ExcelStyleFilter,
+              tooltipValueGetter: (params: any) => params.value || '',
+            });
+            exportColumns.push({
+              kind: 'repeatable_input',
+              question: q,
+              fieldKey,
+              rowIndex,
+              colIndex: colIndex + 1,
+            });
+          });
+        }
+      } else {
+        const baseCode = getQuestionCode(q);
+        const headerName = baseCode;
+        const field = `question_${q.id}`;
+        columns.push({
+          field,
+          headerName,
           width: 200,
           filter: ExcelStyleFilter,
           tooltipValueGetter: (params: any) => params.value || '',
-        };
-      }),
-    ];
+        });
+        exportColumns.push({ kind: 'question', question: q });
+      }
+    });
 
     // 행 데이터 생성
     const rows = responses.map((response) => {
@@ -308,24 +434,16 @@ export default function ResponseDashboardPage() {
       // 각 문항별 응답 데이터 매핑
       const itemMap = new Map(response.items.map(item => [item.question_id, item]));
       
-      questions.forEach((q) => {
-        const item = itemMap.get(q.id!);
-        if (item) {
-          if (item.answer_text) {
-            row[`question_${q.id}`] = item.answer_text;
-          } else if (item.answer_value !== null && item.answer_value !== undefined) {
-            if (Array.isArray(item.answer_value)) {
-              row[`question_${q.id}`] = item.answer_value.join(', ');
-            } else if (typeof item.answer_value === 'object') {
-              row[`question_${q.id}`] = JSON.stringify(item.answer_value);
-            } else {
-              row[`question_${q.id}`] = String(item.answer_value);
-            }
-          } else {
-            row[`question_${q.id}`] = '';
-          }
-        } else {
-          row[`question_${q.id}`] = '';
+      exportColumns.forEach((col) => {
+        if (col.kind === 'question') {
+          const q = col.question;
+          const item = itemMap.get(q.id!);
+          row[`question_${q.id}`] = formatAnswerForExport(q, item);
+        } else if (col.kind === 'repeatable_input') {
+          const q = col.question;
+          const item = itemMap.get(q.id!);
+          const fieldName = `question_${q.id}_r${col.rowIndex}_c${col.colIndex}`;
+          row[fieldName] = extractRepeatableFieldValue(item, col.fieldKey, col.rowIndex);
         }
       });
 

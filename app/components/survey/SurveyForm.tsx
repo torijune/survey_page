@@ -1474,8 +1474,8 @@ export default function SurveyForm({ survey, onComplete, showNavigation = false,
           </Box>
         </Box>
         
-        {/* 섹션 제목 */}
-        {currentSection?.title && (
+        {/* 섹션 제목 및 설명 */}
+        {currentSection && (currentSection.title || currentSection.description) && (
           <Box
             sx={{
               backgroundColor: '#F3F4F6',
@@ -1484,9 +1484,25 @@ export default function SurveyForm({ survey, onComplete, showNavigation = false,
               mb: 3,
             }}
           >
-            <Typography variant="h6" fontWeight={600} sx={{ color: '#1F2937', fontSize: currentFontSize.h6 }}>
-              {currentSection.title}
-            </Typography>
+            {currentSection.title && (
+              <Typography variant="h6" fontWeight={600} sx={{ color: '#1F2937', fontSize: currentFontSize.h6, mb: currentSection.description ? 1.5 : 0 }}>
+                {currentSection.title}
+              </Typography>
+            )}
+            {currentSection.description && currentSection.description.trim() && (
+              <Box
+                sx={{
+                  '& p': { margin: 0, fontSize: currentFontSize.body2, color: '#4B5563', lineHeight: 1.6 },
+                  '& p + p': { mt: 1 },
+                  '& ul, & ol': { pl: 2.5, my: 0.5, fontSize: currentFontSize.body2, color: '#4B5563' },
+                  '& strong': { fontWeight: 600 },
+                }}
+              >
+                <ReactMarkdown remarkPlugins={markdownPlugins}>
+                  {currentSection.description}
+                </ReactMarkdown>
+              </Box>
+            )}
           </Box>
         )}
         

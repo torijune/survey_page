@@ -37,6 +37,7 @@ export default function RepeatableInputsQuestion({
   const currentFontSize = fontSize || defaultFontSize;
   const config = (question.repeatable_config || { parts: [] }) as RepeatableInputsConfig;
   const parts = config.parts || [];
+  const showAddButton = config.show_add_button !== false;
 
   const rows = value.length >= 1 ? value : [{}];
   const displayRows = value.length >= 1 ? value : [{}];
@@ -73,13 +74,25 @@ export default function RepeatableInputsQuestion({
             borderBottom: rowIndex < displayRows.length - 1 ? '1px solid #E5E7EB' : 'none',
           }}
         >
-          <Typography
-            component="span"
-            sx={{ mr: 1, fontSize: currentFontSize.body1, fontWeight: 500 }}
-          >
-            {CIRCLE_NUMBERS[rowIndex] || `${rowIndex + 1}.`}
-          </Typography>
+          {showAddButton && (
+            <Typography
+              component="span"
+              sx={{ mr: 1, fontSize: currentFontSize.body1, fontWeight: 500 }}
+            >
+              {CIRCLE_NUMBERS[rowIndex] || `${rowIndex + 1}.`}
+            </Typography>
+          )}
           {parts.map((part, partIndex) => {
+            if (part.type === 'line_break') {
+              return (
+                <Box
+                  key={partIndex}
+                  component="span"
+                  sx={{ width: '100%', flexBasis: '100%', height: 0 }}
+                  aria-hidden
+                />
+              );
+            }
             if (part.type === 'text') {
               return (
                 <Typography
@@ -182,15 +195,17 @@ export default function RepeatableInputsQuestion({
           )}
         </Box>
       ))}
-      <Button
-        startIcon={<Add />}
-        onClick={addRow}
-        variant="outlined"
-        size="small"
-        sx={{ mt: 2, borderRadius: 2 }}
-      >
-        추가
-      </Button>
+      {showAddButton && (
+        <Button
+          startIcon={<Add />}
+          onClick={addRow}
+          variant="outlined"
+          size="small"
+          sx={{ mt: 2, borderRadius: 2 }}
+        >
+          추가
+        </Button>
+      )}
       {error && (
         <Typography variant="caption" color="error" sx={{ display: 'block', mt: 1, fontSize: currentFontSize.caption }}>
           {error}

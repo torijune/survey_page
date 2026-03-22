@@ -291,14 +291,19 @@ function QuestionEditor({
   // 반복 입력 (주소 등) 설정
   const repeatableConfig = question.repeatable_config || { parts: [] };
   const handleRepeatablePartsChange = (parts: RepeatableInputPart[]) => {
-    onChange({ ...question, repeatable_config: { parts } });
+    onChange({ ...question, repeatable_config: { ...repeatableConfig, parts } });
   };
-  const addRepeatablePart = (type: 'text' | 'input' | 'select') => {
+  const setRepeatableConfigOption = (key: keyof RepeatableInputsConfig, value: boolean) => {
+    onChange({ ...question, repeatable_config: { ...repeatableConfig, [key]: value } });
+  };
+  const addRepeatablePart = (type: 'text' | 'input' | 'select' | 'line_break') => {
     const parts = [...(repeatableConfig.parts || [])];
     if (type === 'text') {
       parts.push({ type: 'text', value: '' });
     } else if (type === 'input') {
       parts.push({ type: 'input', key: `field_${parts.filter(p => p.type === 'input').length + 1}` });
+    } else if (type === 'line_break') {
+      parts.push({ type: 'line_break' });
     } else {
       parts.push({
         type: 'select',
@@ -315,11 +320,11 @@ function QuestionEditor({
   const updateRepeatablePart = (index: number, updates: Partial<RepeatableInputPart>) => {
     const parts = [...(repeatableConfig.parts || [])];
     parts[index] = { ...parts[index], ...updates };
-    handleRepeatablePartsChange(parts);
+    onChange({ ...question, repeatable_config: { ...repeatableConfig, parts } });
   };
   const removeRepeatablePart = (index: number) => {
     const parts = (repeatableConfig.parts || []).filter((_, i) => i !== index);
-    handleRepeatablePartsChange(parts);
+    onChange({ ...question, repeatable_config: { ...repeatableConfig, parts } });
   };
   
   // 조건문 설정 관련 함수들
@@ -1009,18 +1014,33 @@ function QuestionEditor({
               <Typography variant="subtitle2" sx={{ mb: 1 }}>
                 입력 형식 (텍스트와 입력칸을 순서대로 구성)
               </Typography>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={repeatableConfig.show_add_button !== false}
+                    onChange={(_, checked) => setRepeatableConfigOption('show_add_button', checked)}
+                    size="small"
+                  />
+                }
+                label="응답 시 「추가」 버튼 표시"
+                sx={{ mb: 1 }}
+              />
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
-                응답 시 ① 한 행이 먼저 보이고, + 버튼으로 같은 형식의 행을 추가할 수 있습니다.
+                {repeatableConfig.show_add_button !== false
+                  ? '응답 시 ① 한 행이 먼저 보이고, + 버튼으로 같은 형식의 행을 추가할 수 있습니다.'
+                  : '응답 시 ① 한 행만 표시됩니다. (추가 버튼 없음)'}
               </Typography>
               {(repeatableConfig.parts || []).map((part, index) => (
                 <Box key={index} sx={{ display: 'flex', gap: 1, mb: 1, alignItems: 'center', flexWrap: 'wrap' }}>
                   <Chip
                     size="small"
-                    label={part.type === 'text' ? '텍스트' : part.type === 'select' ? '유형 선택' : '입력칸'}
-                    color={part.type === 'text' ? 'default' : part.type === 'select' ? 'secondary' : 'primary'}
+                    label={part.type === 'text' ? '텍스트' : part.type === 'select' ? '유형 선택' : part.type === 'line_break' ? '줄바꿈' : '입력칸'}
+                    color={part.type === 'text' ? 'default' : part.type === 'select' ? 'secondary' : part.type === 'line_break' ? 'info' : 'primary'}
                     variant="outlined"
                   />
-                  {part.type === 'text' ? (
+                  {part.type === 'line_break' ? (
+                    <Typography variant="caption" color="text.secondary">응답 화면에서 여기서 줄이 바뀝니다.</Typography>
+                  ) : part.type === 'text' ? (
                     <TextField
                       size="small"
                       value={part.value || ''}
@@ -1097,6 +1117,9 @@ function QuestionEditor({
                 </Button>
                 <Button startIcon={<Add />} onClick={() => addRepeatablePart('select')} size="small" variant="outlined" color="secondary">
                   유형 선택 추가
+                </Button>
+                <Button startIcon={<Add />} onClick={() => addRepeatablePart('line_break')} size="small" variant="outlined" color="info">
+                  줄바꿈 추가
                 </Button>
               </Stack>
               {(repeatableConfig.parts || []).length === 0 && (

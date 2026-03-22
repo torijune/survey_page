@@ -41,9 +41,9 @@ export interface RankingConfig {
   rank_labels: string[];
 }
 
-/** 반복 입력 문항: 텍스트·입력 필드·유형 선택이 번갈아 나오는 한 줄. + 버튼으로 행 추가 */
+/** 반복 입력 문항: 텍스트·입력 필드·유형 선택·줄바꿈이 순서대로. + 버튼으로 행 추가 */
 export interface RepeatableInputPart {
-  type: 'text' | 'input' | 'select';
+  type: 'text' | 'input' | 'select' | 'line_break';
   value?: string;   // type === 'text' 일 때 표시할 텍스트
   key?: string;     // type === 'input' | 'select' 일 때 필드 키 (각 행의 객체 키)
   placeholder?: string;
@@ -57,6 +57,8 @@ export interface RepeatableInputPart {
 
 export interface RepeatableInputsConfig {
   parts: RepeatableInputPart[];
+  /** 응답 시 "추가" 버튼 표시 여부. 기본 true(표시) */
+  show_add_button?: boolean;
 }
 
 export interface QuestionOption {
